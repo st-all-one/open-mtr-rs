@@ -1,5 +1,5 @@
 [package]
-name = "mtr-sinir-uniffi"
+name = "open-mtr-uniffi"
 edition.workspace = true
 version.workspace = true
 publish = false
@@ -8,13 +8,14 @@ publish = false
 workspace = true
 
 [lib]
-name = "uniffi_mtr_sinir"
+name = "uniffi_open_mtr"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-mtr-sinir-core = { path = "../core" }
+open-mtr-core = { path = "../core" }
 uniffi = "0.28"
 tokio = { version = "1", features = ["sync", "time", "rt", "rt-multi-thread", "macros"] }
+serde.workspace = true
 serde_json.workspace = true
 
 [build-dependencies]

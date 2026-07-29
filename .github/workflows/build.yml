@@ -18,7 +18,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Check core
-        run: cargo check -p mtr-sinir-core
+        run: cargo check -p open-mtr-core
 
       - name: Run tests
         run: cargo test
@@ -33,10 +33,10 @@ jobs:
         run: cd napi && npm test
 
       - name: Build uniffi
-        run: cargo build -p mtr-sinir-uniffi --release
+        run: cargo build -p open-mtr-uniffi --release
 
       - name: Generate Python bindings
-        run: uniffi-bindgen generate uniffi/src/mtr_sinir.udl --language python --out-dir bindings/python/
+        run: uniffi-bindgen generate uniffi/src/open_mtr.udl --language python --out-dir bindings/python/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -1,189 +1,491 @@
-# mtr-sinir
+<div align="center">
 
-Wrapper Rust para a API SINIR (Sistema Nacional de Informações sobre a Gestão dos Resíduos Sólidos).
+# openMTR
 
-## Stack
+**Shell unificado para gestão de MTRs — assíncrono, multi-sistema, tipos universais**
 
-| Camada | Tecnologia |
-|--------|-----------|
-| Runtime | Rust 1.85+ (edition 2024), `tokio` async |
-| HTTP | `reqwest` 0.12 (rustls-tls) |
-| Serialização | `serde` + `serde_json` |
-| Erros | `thiserror` — RFC 7807 + UUID v7 |
-| Logs | `tracing` — spans, `#[instrument]` |
-| Cache | `Arc<RwLock>` ou `moka` (opt) |
-| Rate limit | Sliding window |
-| Retry | Backoff exponencial (3 tries) |
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-2b3a42?style=for-the-badge)](https://opensource.org/licenses/MPL-2.0)
+[![Rust](https://img.shields.io/badge/Rust-1.85%2B-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Made in Brazil](https://img.shields.io/badge/Made_in-Brazil-009739?style=for-the-badge)](https://github.com/topics/brazil)
 
-## Arquitetura
+</div>
+
+**openMTR** é um wrapper multi-sistema para APIs de Manifesto de Transporte de Resíduos (MTR). Ele unifica diferentes implementações estaduais e nacional (SINIR) sob uma mesma interface, com tipos universais de domínio, envelope de resposta padronizado (RFC 9457) e zero acoplamento a sistemas específicos.
+
+---
+
+## 📖 Índice
+
+- [Arquitetura](#-arquitetura)
+- [Quick-start](#-quick-start)
+- [Sistemas Suportados](#-sistemas-suportados)
+- [16 Métodos Universais](#-16-métodos-universais)
+- [Adapter Pattern](#-adapter-pattern)
+- [Envelope de Resposta](#-envelope-de-resposta)
+- [Enriquecimento Detalhado](#-enriquecimento-detalhado)
+- [Uso TypeScript / Python](#-uso-typescript--python)
+- [Testes](#-testes)
+- [Stack](#-stack)
+- [Comparação com Wrappers Específicos](#-comparação-com-wrappers-específicos)
+
+---
+
+## 🏗️ Arquitetura
 
 ```
-mtr-sinir/
-├── core/          # Crate raiz (100% agnóstico)
-│   ├── src/
-│   │   ├── client/     # MtrClient, TokenManager, retry, trait Endpoint
-│   │   ├── core/       # MtrConfig, MtrError (RFC 7807)
-│   │   ├── schemas/    # 10 domínios (manifesto, recebimento, CDF, LR, IE, ...)
-│   │   └── services/   # Lógica de negócio + builders typestate
-│   └── tests/          # Testes de integração (wiremock)
-├── napi/          # Bindings napi-rs → Node.js / TypeScript / Bun
-│   └── src/lib.rs
-├── uniffi/        # Bindings UniFFI → Python / Kotlin / Swift / Ruby / Go / C#
-│   ├── src/
-│   │   ├── lib.rs
-│   │   └── mtr_sinir.udl
-│   └── bindings/      # (gerado)
-└── docs/
-    ├── wiki/          # Documentação interna
-    └── AGENTS.md      # Guia do agente AI
+openMTR
+└── OpenMtrClient (facade única — 16 métodos universais)
+    └── MtrAdapter (trait interna — 1 implementação por sistema)
+        ├── SinirAdapter    → SINIR Nacional (✅ completo)
+        ├── SigorAdapter    → SIGOR / Ceará     (🚧 pendente)
+        ├── MtrPeAdapter    → MTR Pernambuco    (🚧 pendente)
+        └── ...             → +5 sistemas       (🚧 pendente)
 ```
 
-## Começando
+### Camadas
 
-```bash
-# Rust toolchain
-rustup toolchain install 1.85.0
-rustup default 1.85.0
+| Camada | Responsabilidade |
+|---|---|
+| **OpenMtrClient** | Fachada pública — 16 métodos agnósticos que o usuário chama |
+| **MtrAdapter** | Contrato interno — cada sistema implementa à sua maneira |
+| **domain/** | Tipos universais (`Mtr`, `Parte`, `Residuo`, `FiltroMtr`, `Periodo`, etc.) |
+| **client/** | HTTP genérico (`reqwest`, retry 3×, refresh JWT, rate-limit) |
+| **error.rs** | `OpenMTRError` (catastrófico, RFC 9457) |
+| **resposta.rs** | `Resposta<T>` (envelope único para sucesso e erro de negócio) |
 
-# Build + test
-cargo build
-cargo test                    # 42 tests
-cargo clippy                  # 0 warnings
-
-# Documentação
-cargo doc --open -p mtr-sinir-core
+```
+┌── Entrada do usuário ────────────────────────────────────────────┐
+│                                                                   │
+│  mtr.consultar_mtrs(&FiltroMtr {                                  │
+│      periodo: Some(Periodo::ultimos_dias(30)),                    │
+│      parte: Some(FiltroParte { tipo: TipoParte::Transportador }), │
+│      detalhado: true,                                             │
+│      ..Default::default()                                         │
+│  }).await?;                                                       │
+│                                                                   │
+└──────────────────────────┬────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────── SinirAdapter ──────────────────────────────────┐
+│                                                                   │
+│  1. POST /listaManifesto → extrai números                         │
+│  2. GET  /retornaManifesto/{n}  ← paralelo (N requisições)        │
+│  3. Monta Vec<Mtr> com resíduos, CNPJs, campos completos          │
+│                                                                   │
+└──────────────────────────┬────────────────────────────────────────┘
+                           │
+                           ▼
+┌────────────────── Resposta<Mtr> ──────────────────────────────────┐
+│                                                                   │
+│  {                                                                │
+│    "id": "0193a1b2-...",  // UUID v7                              │
+│    "ok": true,                                                    │
+│    "dados": [ { "numero": "261032125684", "residuos": [...] } ],  │
+│    "erros": [],                                                   │
+│    "total": 42              // totalRecords da API                │
+│  }                                                                │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-## Uso (Rust puro)
+---
+
+## 🚀 Quick-start
+
+### Adicione ao `Cargo.toml`:
+
+```toml
+[dependencies]
+open-mtr-core = "0.1"
+tokio = { version = "1", features = ["full"] }
+```
+
+### Configuração:
 
 ```rust
-use mtr_sinir_core::client::http::MtrClient;
-use mtr_sinir_core::core::config::MtrConfig;
-use mtr_sinir_core::services::manifesto::ManifestoService;
-use mtr_sinir_core::schemas::common::DataMtr;
-use mtr_sinir_core::schemas::manifesto::TipoParceiro;
+use open_mtr_core::*;
 
-let client = MtrClient::new(
-    MtrConfig::builder()
-        .base_url("https://admin.sinir.gov.br/api")
-        .integration_token(std::env::var("MTR_INTEGRATION_TOKEN")?)
-        .build()?,
-)?;
-
-let service = ManifestoService::new(client);
-let (lista, total) = service
-    .listar(
-        DataMtr::parse("01-01-2024")?,
-        DataMtr::parse("31-01-2024")?,
-        TipoParceiro::Gerador,
-        0, 10,
-    )
+let mtr = OpenMtrClient::builder()
+    .base(System::Sinir)
+    .token(std::env::var("OPENMTR_SINIR_TOKEN")?)
+    .build()
     .await?;
 ```
 
-## Workspace Members
-
-### core (`mtr-sinir-core`)
-
-Crate principal com toda a lógica de negócio, schemas, e integração HTTP.
-
-**Endpoints suportados:**
-- Auth: POST `/token`
-- Manifesto: listar, cancelar, download PDF
-- Recebimento: registrar lote, alterar, aceitar
-- CDF: emitir, emitir LR, download
-- Logística Reversa: origem, processo, alterar titularidade
-- Integração Estadual: integrar manifestos, integrar recebimento
-- Tabelas: acondicionamento, unidades, classes, estados físicos
-
-### napi (`mtr-sinir-napi`)
-
-Bindings nativos para Node.js/TypeScript via [napi-rs](https://napi.rs).
-
-```bash
-cd napi && npm ci && npm run build
-```
-
-```typescript
-import { MtrSinirClient } from '@mtr-sinir/native';
-
-const client = new MtrSinirClient(
-  process.env.MTR_INTEGRATION_TOKEN!,
-  'https://admin.sinir.gov.br/api',
-);
-
-const lista = await client.listarManifestos('01-01-2024', '31-01-2024', 8, 0, 10);
-const pdf = await client.downloadPdf('00001');
-```
-
-### uniffi (`mtr-sinir-uniffi`)
-
-Bindings para Python / Kotlin / Swift / Ruby / Go / C# via [UniFFI](https://mozilla.github.io/uniffi-rs/).
-
-```bash
-cargo build -p mtr-sinir-uniffi --release
-uniffi-bindgen generate uniffi/src/mtr_sinir.udl --language python
-```
-
-```python
-from mtr_sinir_uniffi import MtrSinirClient
-
-client = MtrSinirClient.init("token", "https://admin.sinir.gov.br/api")
-lista = client.listar_manifestos("01-01-2024", "31-01-2024", 8, 0, 10)
-```
-
-## Domain Newtypes
-
-Tipos com validação em Rust para segurança de dados:
-
-| Tipo | Validação | Serialização |
-|------|-----------|-------------|
-| `Cnpj` | 14 dígitos + check digits | string limpa ou formatada |
-| `Cpf` | 11 dígitos + check digits | string limpa ou formatada |
-| `CpfCnpj` | 11→CPF, 14→CNPJ | automática |
-| `DataMtr` | `dd-MM-yyyy` | string |
-| `Pagina` | ≥ 1 | i32 |
-| `TamanhoPagina` | 1..=50 | i32 |
-| `TimestampMs` | ms desde epoch | i64 |
-
-## Builders com Typestate
-
-Padrão builder que usa o sistema de tipos do Rust para garantir chamadas corretas em tempo de compilação:
-
-- `ManifestoListBuilder<StFaltando → StPronto>` — `periodo()` obrigatório antes de `build()`
-- `SalvarManifestoLoteBuilder<SemResiduos → ComResiduos>` — `add_residuo()` obrigatório antes de `build()`
-
-## trait Endpoint
-
-Abstração type-safe sobre endpoints HTTP:
+### Consultar MTRs específicos:
 
 ```rust
-pub trait Endpoint {
-    type Response: DeserializeOwned;
-    fn method(&self) -> Method;
-    fn path(&self) -> Cow<'static, str>;
+// Retorna dados completos via GET /retornaManifesto/{n}
+let resp = mtr.consultar_mtrs(&FiltroMtr {
+    numeros: Some(vec!["261032125684".into()]),
+    ..Default::default()
+}).await?;
+
+for m in &resp.dados {
+    println!("#{} status={:?}", m.numero, m.status);
+    println!("   gerador: {:?}", m.gerador.as_ref().map(|p| &p.razao_social));
+    println!("   resíduos: {}", m.residuos.len());
+    for r in &m.residuos {
+        println!("     - {} qtd={}", r.codigo_ibama, r.quantidade);
+    }
 }
 ```
 
-Implementações: `ListarManifestos`, `DownloadPdf`, `CancelarManifesto`.
+### Consultar por período + enriquecer:
 
-## Testes
+```rust
+// 1 request de lista + N requests paralelos de detalhe
+let resp = mtr.consultar_mtrs(&FiltroMtr {
+    periodo: Some(Periodo::ultimos_dias(30)),
+    parte: Some(FiltroParte {
+        tipo: TipoParte::Transportador,
+        ..Default::default()
+    }),
+    detalhado: true,   // ← enriquece com resíduos, CNPJs, etc.
+    ..Default::default()
+}).await?;
 
-```bash
-cargo test                           # 42 testes
-cargo test --test integration_test   # só wiremock
+println!("{} MTRs encontrados (total: {:?})", resp.dados.len(), resp.total);
 ```
 
-- Testes unitários de schema: inline `#[cfg(test)]` nos source files
-- Testes de integração: `wiremock` simulando API SINIR
+### Download em lote:
 
-## Docker
+```rust
+let resp = mtr.download_mtrs(vec![
+    "261032125684".into(),
+    "251032126570".into(),
+]).await?;
 
-```bash
-docker build -t mtr-sinir .
-docker run --rm -it mtr-sinir
+for item in &resp.dados {
+    tokio::fs::write(&item.filename, &item.buffer).await?;
+}
 ```
 
-## Licença
+### Tabelas de apoio:
 
-MPL-2.0
+```rust
+let residuos = mtr.listar_residuos().await?;
+let acondicionamentos = mtr.listar_acondicionamentos().await?;
+let classes = mtr.listar_classes().await?;
+let estados = mtr.listar_estados_fisicos().await?;
+let tratamentos = mtr.listar_tratamentos().await?;
+let unidades = mtr.listar_unidades().await?;
+```
+
+### Tratamento de erros (RFC 9457):
+
+```rust
+match mtr.consultar_mtrs(&filtro).await {
+    Ok(resp) => {
+        for m in &resp.dados { println!("✅ {}", m.numero); }
+        for e in &resp.erros {
+            eprintln!("⚠️  [{}] {}", e.status, e.detail);
+        }
+    }
+    Err(cat) => {
+        // Catastrófico: rede, timeout, auth
+        eprintln!("❌ {} — {} (type: {})", cat.title, cat.detail, cat.r#type);
+    }
+}
+```
+
+---
+
+## 🗺️ Sistemas Suportados
+
+| Sistema | Status | Adapter | Base URL |
+|---|---|---|---|
+| **SINIR Nacional** | ✅ Completo | `SinirAdapter` | `admin.sinir.gov.br/api` |
+| SIGOR (Ceará) | 🚧 Pendente | — | — |
+| MTR Pernambuco | 🚧 Pendente | — | — |
+| MTR Ceará | 🚧 Pendente | — | — |
+| MTR São Paulo | 🚧 Pendente | — | — |
+| MTR Rio de Janeiro | 🚧 Pendente | — | — |
+| MTR Minas Gerais | 🚧 Pendente | — | — |
+| MTR Bahia | 🚧 Pendente | — | — |
+
+```rust
+// Alternar entre sistemas é trocar uma linha:
+let mtr = OpenMtrClient::builder()
+    .base(System::Sinir)   // ou System::Sigor, System::MtrPe, ...
+    .token("...")
+    .build()
+    .await?;
+// Todos os 16 métodos funcionam da mesma forma
+```
+
+---
+
+## 🎯 16 Métodos Universais
+
+### MTRs
+
+| Método | Parâmetro | Retorno | Descrição |
+|---|---|---|---|
+| `consultar_mtrs` | `&FiltroMtr` | `Resposta<Mtr>` | Consulta por número(s), período, parte ou composição |
+| `criar_mtrs` | `Vec<CriarMtr>` | `Resposta<MtrCriado>` | Criar manifestos em lote |
+| `receber_mtrs` | `Vec<ReceberMtr>` | `Resposta<MtrRecebido>` | Registrar recebimento em lote |
+| `cancelar_mtrs` | `Vec<CancelarMtr>` | `Resposta<MtrCancelado>` | Cancelar em lote |
+| `modificar_mtrs` | `Vec<ModificarMtr>` | `Resposta<MtrModificado>` | Alterar recebimento / titularidade |
+| `download_mtrs` | `Vec<String>` | `Resposta<DownloadItem>` | Download de PDF em lote |
+
+### CDF (Certificado de Destinação Final)
+
+| Método | Parâmetro | Retorno | Descrição |
+|---|---|---|---|
+| `gerar_cdfs` | `Vec<GerarCdf>` | `Resposta<CdfEmitido>` | Emitir certificados em lote |
+| `consultar_cdfs` | `&FiltroCdf` | `Resposta<Cdf>` | Consultar certificados |
+| `download_cdfs` | `Vec<DownloadCdf>` | `Resposta<DownloadItem>` | Download PDF/XML em lote |
+
+### Tabelas de Apoio
+
+| Método | Retorno | Descrição |
+|---|---|---|
+| `listar_residuos` | `Resposta<ResiduoIbama>` | Lista de resíduos IBAMA |
+| `listar_acondicionamentos` | `Resposta<Acondicionamento>` | Tipos de acondicionamento |
+| `listar_classes` | `Resposta<ClasseResiduo>` | Classes de resíduo |
+| `listar_estados_fisicos` | `Resposta<EstadoFisico>` | Estados físicos |
+| `listar_tratamentos` | `Resposta<TratamentoResiduo>` | Tipos de tratamento |
+| `listar_unidades` | `Resposta<UnidadeMedida>` | Unidades de medida |
+
+### Autenticação Legado
+
+| Método | Descrição |
+|---|---|
+| `OpenMtrAuth::builder().credenciais(cpf, senha, unidade).build()` | Para sistemas que exigem CPF+senha |
+
+---
+
+## 🧩 Adapter Pattern
+
+Cada sistema implementa o trait `MtrAdapter` com **16 métodos**. A facade `OpenMtrClient` delega para o adapter sem saber de paths, DTOs ou particularidades do sistema.
+
+```rust
+#[async_trait]
+pub(crate) trait MtrAdapter: Send + Sync {
+    fn system(&self) -> System;
+    fn nome(&self) -> &'static str;
+
+    async fn autenticar_token(&self, ctx: &MtrCtx) -> Result<String, OpenMTRError>;
+    async fn autenticar_credenciais(&self, ctx: &MtrCtx, ...) -> Result<String, OpenMTRError>;
+
+    async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError>;
+    async fn criar_mtrs(&self, ctx: &MtrCtx, mtrs: Vec<CriarMtr>) -> Result<LoteResult<MtrCriado>, OpenMTRError>;
+    // ... +14 métodos
+}
+```
+
+### Implementando um novo sistema
+
+```rust
+struct MtrPeAdapter;
+
+#[async_trait]
+impl MtrAdapter for MtrPeAdapter {
+    fn system(&self) -> System { System::MtrPe }
+    fn nome(&self) -> &'static str { "MTR PE" }
+
+    async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError> {
+        // 1. Montar requisição no formato do MTR-PE
+        // 2. ctx.http.post() / ctx.http.get()
+        // 3. Converter resposta JSON para tipos do domínio
+        // 4. Retornar LoteResult<Mtr>
+    }
+    // ... +15 métodos
+}
+```
+
+### SinirAdapter (implementação de referência)
+
+O adapter SINIR usa **3 rotas de consulta** otimizadas:
+
+| Situação | Endpoint | Resíduos | CNPJ |
+|---|---|---|---|
+| `numeros: ["N"]` | `GET /retornaManifesto/{N}` | ✅ Completo | ✅ Preenchido |
+| `periodo + detalhado: true` | `POST /listaManifesto` → extrai números → N× `GET /retornaManifesto/{N}` | ✅ Completo | ✅ Preenchido |
+| `periodo + detalhado: false` (ou omitido) | `POST /listaManifesto` | ❌ Vazio | ❌ `null` |
+
+---
+
+## 📦 Envelope de Resposta
+
+Toda operação retorna `Result<Resposta<T>, OpenMTRError>` — nunca `Result<Vec<T>>`.
+
+### Sucesso (`Ok(Resposta)`)
+```json
+{
+  "id": "0193a1b2-cdef-7012-b456-789012345678",
+  "ok": true,
+  "status": 200,
+  "mensagem": "OK",
+  "dados": [ { "numero": "261032125684", "residuos": [...] } ],
+  "erros": [],
+  "total": 42
+}
+```
+
+### Erro de negócio (`Ok(Resposta)` com `erros`)
+```json
+{
+  "id": "0193a1b2-...",
+  "ok": true,
+  "status": 200,
+  "dados": [],
+  "erros": [
+    { "type": "urn:openmtr:error:not-found",
+      "title": "Não encontrado",
+      "status": 404,
+      "detail": "MTR 999999 não encontrado",
+      "instance": "0193a1b2-..." }
+  ],
+  "total": null
+}
+```
+
+### Erro catastrófico (`Err(OpenMTRError)`)
+```json
+{
+  "type": "urn:openmtr:error:network",
+  "title": "Erro de rede",
+  "status": 503,
+  "detail": "connection refused after 3 retries",
+  "instance": "0193a1b2-..."
+}
+```
+
+---
+
+## 🔬 Enriquecimento Detalhado
+
+O campo `detalhado: true` no `FiltroMtr` transforma uma consulta simples em uma busca completa com resíduos:
+
+```rust
+// Sem detalhado — apenas dados básicos (1 request)
+let basico = mtr.consultar_mtrs(&FiltroMtr {
+    periodo: Some(Periodo::ultimos_dias(30)),
+    ..Default::default()
+}).await?;
+// basico.dados[0].residuos → Vec::new() (vazio)
+
+// Com detalhado — dados completos (N+1 requests paralelos)
+let completo = mtr.consultar_mtrs(&FiltroMtr {
+    periodo: Some(Periodo::ultimos_dias(30)),
+    detalhado: true,
+    ..Default::default()
+}).await?;
+// completo.dados[0].residuos → [Residuo { codigo_ibama: "170903(*)", ... }]
+```
+
+O enriquecimento é feito em **paralelo** — todas as requisições de detalhe disparam simultaneamente via `tokio`.
+
+---
+
+## 🌐 Uso TypeScript / Python
+
+### TypeScript (napi-rs)
+
+```typescript
+import { OpenMtrClient } from '@open-mtr/native';
+
+const client = new OpenMtrClient('sinir', process.env.OPENMTR_SINIR_TOKEN!);
+
+// Consulta
+const resp = await client.consultarMtrs(JSON.stringify({
+  numeros: ['261032125684']
+}));
+console.log(resp.dados[0].numero, resp.dados[0].residuos.length);
+
+// Download
+const pdfs = await client.downloadMtrs(['261032125684']);
+```
+
+### Python (UniFFI)
+
+```python
+from open_mtr_uniffi import OpenMtrClient
+
+client = OpenMtrClient.init("sinir", "token", None)
+result = client.listar_manifestos('{"numeros": ["261032125684"]}')
+```
+
+---
+
+## 🧪 Testes
+
+```bash
+cargo test -p open-mtr-core                            # 99 testes
+cargo test -p open-mtr-core --test live_sinir_test     # testes contra API real
+```
+
+### Cobertura
+
+| Tipo | Qtd | O que testa |
+|---|---|---|
+| **Unitários** | 68 | Validação de newtypes, construção de `Resposta`, `Periodo`, serialização |
+| **Wiremock** | 8 | Consulta por número, consulta por período, erro 404, download PDF |
+| **OpenMtrClient** | 5 | Builder (sistema faltando, token faltando), `System::from_str` |
+| **Live (SINIR real)** | 14 | Consulta, filtros, tabelas, download, token inválido, detalhado |
+
+### Testes ao vivo
+
+```bash
+cp .env.example .env
+# Preencha com seu integration_token do SINIR
+cargo test -p open-mtr-core --test live_sinir_test
+```
+
+---
+
+## 🛠️ Stack
+
+| Componente | Tecnologia |
+|---|---|
+| Runtime | Rust 1.85+ (edition 2024) |
+| Async | `tokio` (sync, time, fs) |
+| HTTP | `reqwest` 0.12 (async, rustls-tls) |
+| Serialização | `serde` + `serde_json` |
+| Erros | RFC 9457 (Problem Details) + UUID v7 |
+| Logs | `tracing` — spans, `#[instrument]`, structured |
+| Retry | Backoff exponencial (3 tentativas, 1s/2s/4s) |
+| Rate limiting | Sliding window configurável |
+| FFI (Node.js) | napi-rs |
+| FFI (Python/Kotlin/Swift) | UniFFI |
+| Licença | MPL-2.0 |
+
+### Dependências
+
+```toml
+[dependencies]
+serde = "1"           # Serialização JSON
+serde_json = "1"      # Parsing JSON
+reqwest = "0.12"      # HTTP client
+tokio = "1"           # Async runtime
+chrono = "0.4"        # Datas
+uuid = { version = "1", features = ["v7"] }    # Correlation IDs
+url = "2"             # URLs
+tracing = "0.1"       # Logs estruturados
+base64 = "0.22"       # Decode JWT
+async-trait = "0.1"   # Async trait methods
+```
+
+---
+
+## 📋 Comparação: openMTR vs Wrapper Específico
+
+| Aspecto | Wrapper específico (ex: SDK SINIR) | openMTR |
+|---|---|---|
+| **Sistemas** | 1 (SINIR) | N (SINIR + estaduais) |
+| **API pública** | Acoplada aos DTOs do SINIR | Tipos universais de domínio |
+| **Adapter** | Inexistente | `MtrAdapter` trait — 1 por sistema |
+| **Resposta** | `Result<Vec<T>>` | `Result<Resposta<T>, OpenMTRError>` com envelope RFC 9457 |
+| **Cache** | Geralmente embutido | Responsabilidade da aplicação final |
+| **Resíduos** | Só na criação | Via `detalhado: true` ou consulta por número |
+| **FFI** | N/A | napi-rs (Node.js) + UniFFI (Python/Kotlin/Swift) |
+
+---
+
+<div align="center">
+
+**Licença:** Mozilla Public License v2.0 (MPL-2.0)
+
+</div>

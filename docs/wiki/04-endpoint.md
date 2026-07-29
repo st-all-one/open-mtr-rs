@@ -1,68 +1,57 @@
-# trait Endpoint + PaginatedIter
+# Cliente HTTP
 
-## trait Endpoint
+O `MtrHttpClient` é o wrapper genérico sobre `reqwest` usado internamente pelos adapters.
+
+## Características
+
+- **Retry**: 3 tentativas com backoff exponencial (1s, 2s, 4s)
+- **Refresh JWT**: Renovação automática em 401 (1 retry)
+- **Tracing**: Todos os métodos instrumentados com `#[instrument]`
+- **Timeout**: Configurável via `Config.timeout`
+- **Rate limiting**: Sliding window configurável via `Config.max_rps`
+
+## Métodos
 
 ```rust
-pub trait Endpoint {
-    type Response: DeserializeOwned;
-    fn method(&self) -> Method;
-    fn path(&self) -> Cow<'static, str>;
-    fn query_params(&self) -> Vec<(String, String)> { vec![] }
-    fn body(&self) -> Option<Value> { None }
+impl MtrHttpClient {
+    // GET com parse JSON
+    async fn get<T: DeserializeOwned>(path, op) -> Result<T>;
+
+    // POST com body JSON
+    async fn post<T, B>(path, body, op) -> Result<T>;
+
+    // POST que retorna bytes (download)
+    async fn post_bytes(path, op) -> Result<Vec<u8>>;
+
+    // GET que retorna bytes
+    async fn get_bytes(path, op) -> Result<Vec<u8>>;
+
+    // Genérico
+    async fn request<T, B>(method, path, body, op) -> Result<T>;
+    async fn request_raw(method, path, op) -> Result<Vec<u8>>;
 }
 ```
 
-Implementações concretas:
+## TokenManager
 
-| Struct | Response | Method | Path |
-|--------|----------|--------|------|
-| `ListarManifestos { dto }` | `ObjetoRespostaRest<Vec<ManifestoResumo>>` | POST | `/listaManifesto` |
-| `DownloadPdf { man_numero }` | `Vec<u8>` | POST | `/downloadManifesto/{num}` |
-| `CancelarManifesto { dto }` | `ObjetoRespostaRest<CancelamentoResponse>` | POST | `/cancelarManifesto` |
+Gerencia o ciclo de vida do JWT:
 
-## MtrClient::call
+- Cache em memória com expiry tracking
+- Refresh automático via POST para URL configurada
+- Fallback de 8h se JWT não tiver claim `exp`
+- Margem de segurança de 60s antes do expiry real
 
-```rust
-pub async fn call<E: Endpoint>(&self, ep: E) -> Result<E::Response, MtrError>
-```
-
-Roteia automaticamente:
-- `body()` com `Some` → `request_with_body`
-- `query_params()` não vazio → `request_with_params`
-- Caso contrário → `request`
-
-Para downloads:
+## Uso no adapter
 
 ```rust
-pub async fn call_download<E: Endpoint<Response = Vec<u8>>>(&self, ep: E)
-    -> Result<Vec<u8>, MtrError>
-```
+async fn minhas_consultas(&self, ctx: &MtrCtx) -> Result<..., OpenMTRError> {
+    // POST
+    let resp: Value = ctx.http.post("/api/endpoint", &body, "op").await?;
 
-## PaginatedIter
+    // GET
+    let resp: Value = ctx.http.get("/api/endpoint", "op").await?;
 
-```rust
-pub struct PaginatedIter {
-    client: MtrClient,
-    filtro_base: ApiwsListaManifestoDTO,
-    page: i32,
-    page_size: i32,
-    total_elements: i64,
-    buffer: Vec<ManifestoResumo>,
-    idx: usize,
-    done: bool,
+    // Download
+    let bytes = ctx.http.post_bytes("/api/download", "op").await?;
 }
 ```
-
-```rust
-let mut iter = PaginatedIter::new(client, filtro_base, 100);
-
-// Pull mode
-while let Some(item) = iter.next().await? {
-    process(item);
-}
-
-// Collect all
-let todos: Vec<ManifestoResumo> = iter.collect_all().await?;
-```
-
-Lazy: só busca próxima página quando o buffer atual acaba.

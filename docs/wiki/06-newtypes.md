@@ -1,120 +1,52 @@
-# Domain Newtypes
-
-Newtypes com validação para tipos primitivos do domínio SINIR.
+# Newtypes com Validação
 
 ## Cnpj
 
 ```rust
-pub struct Cnpj(String);
+Cnpj::new("11.222.333/0001-81")?;     // formatado
+Cnpj::new("11222333000181")?;         // limpo
 ```
 
-### Validação (`Cnpj::new`)
-1. Filtra só dígitos ASCII
-2. Exatamente 14 dígitos
-3. Rejeita dígitos repetidos (ex: `11.111.111/1111-11`)
-4. Calcula e confere 1º e 2º dígitos verificadores
-
-### Serialização
-- `Serialize` → string limpa `"11222333000181"`
-- `Deserialize` → aceita qualquer string sem validação (leniente)
-- `Display` → formatado `"11.222.333/0001-81"`
-
-### Uso
-
-```rust
-// Validação estrita (input do usuário)
-let cnpj = Cnpj::new("11.222.333/0001-44")?;
-
-// Deserialize da API (aceita o que vier)
-let cnpj: Cnpj = serde_json::from_str(r#""11222333000181""#)?;
-```
-
-### Campos que usam Cnpj
-
-| Schema | Campo |
-|--------|-------|
-| `ParceiroMTR` | `cnpj: Option<Cnpj>` |
-| `ParteMTR` | `cnpj: Cnpj` |
+- 14 dígitos com validação de dígitos verificadores
+- Rejeita sequências repetidas (`00.000.000/0000-00`)
+- Serializa como `"11.222.333/0001-81"` (formatado)
+- Deserialize aceita ambos os formatos
 
 ## Cpf
 
 ```rust
-pub struct Cpf(String);
+Cpf::new("529.982.247-25")?;          // formatado
+Cpf::new("52998224725")?;             // limpo
 ```
 
-Validação similar ao Cnpj: 11 dígitos, check digits, sem repetição.
-
-### Campos que usam Cpf
-
-| Schema | Campo |
-|--------|-------|
-| `ParceiroAcesso` | `paa_cpf: Cpf` |
+- 11 dígitos com validação de dígitos verificadores
+- Rejeita sequências repetidas
 
 ## CpfCnpj
 
+Auto-detecta pelo tamanho: 11 → CPF, 14 → CNPJ.
+
 ```rust
-pub enum CpfCnpj {
-    Cpf(Cpf),
-    Cnpj(Cnpj),
-}
+let doc = CpfCnpj::new("52998224725")?;   // CpfCnpj::Cpf(...)
+let doc = CpfCnpj::new("11222333000181")?; // CpfCnpj::Cnpj(...)
 ```
-
-- `CpfCnpj::new("...")` → detecta por tamanho (11→Cpf, 14→Cnpj)
-- `Deserialize` → automático por len
-
-### Campos que usam CpfCnpj
-
-| Schema | Campo |
-|--------|-------|
-| `ParteManifesto` | `cpf_cnpj: CpfCnpj` |
 
 ## DataMtr
 
-```rust
-pub struct DataMtr(pub chrono::NaiveDate);
-```
-
-Formato SINIR: `dd-MM-yyyy`
+Wrapper sobre `NaiveDate` com formato `dd-MM-yyyy`.
 
 ```rust
-DataMtr::new(date)                    // de NaiveDate
-DataMtr::parse("01-01-2024")?         // de string
-Serialize  → "01-01-2024"
-Deserialize ← "01-01-2024"
+let data = DataMtr::parse("01-01-2025")?;
+let data = DataMtr::new(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap());
 ```
+
+Serializa como `"01-01-2025"`.
 
 ## TimestampMs
 
-```rust
-pub struct TimestampMs(pub i64);      // ms desde epoch
-```
+Milissegundos desde epoch (Unix timestamp em ms).
 
 ```rust
-TimestampMs::now()
-TimestampMs::from_datetime(&dt)
-Serialize  → i64
-Deserialize ← i64
+let ts = TimestampMs::now();
+let ts = TimestampMs::from_datetime(naive_datetime);
 ```
-
-## Pagina
-
-```rust
-pub struct Pagina(u32);
-Pagina::new(1)   // Ok
-Pagina::new(0)   // Err — "pagina deve ser >= 1"
-```
-
-## TamanhoPagina
-
-```rust
-pub struct TamanhoPagina(u32);
-TamanhoPagina::new(1)    // Ok
-TamanhoPagina::new(50)   // Ok
-TamanhoPagina::new(51)   // Err — "tamanho da pagina deve estar entre 1 e 50"
-```
-
-## Regra de Ouro
-
-- `::new()` — validação estrita (input do usuário)
-- `Deserialize` — leniente (aceita o que a API retornar)
-- `::parse_unchecked()` / `::from()` — sem validação

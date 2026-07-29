@@ -1,0 +1,68 @@
+namespace open_mtr {};
+
+[Error]
+enum OpenMtrError {
+  "Api",
+  "Network",
+  "Timeout",
+  "Auth",
+  "Config",
+  "Validation",
+};
+
+interface OpenMtrClient {
+  [Throws=OpenMtrError]
+  constructor(string system, string token, string? base_url);
+
+  // MTR
+  [Throws=OpenMtrError]
+  string consultar_mtrs(string filtro_json);
+
+  [Throws=OpenMtrError]
+  string criar_mtrs(string mtrs_json);
+
+  [Throws=OpenMtrError]
+  string receber_mtrs(string lotes_json);
+
+  [Throws=OpenMtrError]
+  string cancelar_manifesto(string numero, string justificativa);
+
+  [Throws=OpenMtrError]
+  string modificar_mtrs(string mods_json);
+
+  [Throws=OpenMtrError]
+  string download_mtrs(sequence<string> nums);
+
+  // CDF
+  [Throws=OpenMtrError]
+  string gerar_cdfs(string reqs_json);
+
+  [Throws=OpenMtrError]
+  string consultar_cdfs(string filtro_json);
+
+  [Throws=OpenMtrError]
+  string download_cdfs(string reqs_json);
+
+  // Tabelas
+  [Throws=OpenMtrError]
+  string listar_residuos();
+
+  [Throws=OpenMtrError]
+  string listar_acondicionamentos();
+
+  [Throws=OpenMtrError]
+  string listar_classes();
+
+  [Throws=OpenMtrError]
+  string listar_estados_fisicos();
+
+  [Throws=OpenMtrError]
+  string listar_tratamentos();
+
+  [Throws=OpenMtrError]
+  string listar_unidades();
+
+  // Conveniência
+  [Throws=OpenMtrError]
+  sequence<u8> download_pdf(string numero);
+};

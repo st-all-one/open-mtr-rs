@@ -1,96 +1,75 @@
-# Testing
+# Testes
+
+## Executar
+
+```bash
+# Todos os testes
+cargo test -p open-mtr-core                       # 96 testes
+
+# Apenas wiremock
+cargo test -p open-mtr-core --test wiremock_sinir
+
+# Apenas testes ao vivo (requer .env com token real)
+cargo test -p open-mtr-core --test live_sinir_test
+```
 
 ## Estrutura
 
 ```
-core/src/schemas/
-├── auth.rs                # #[cfg(test)] — TokenResponse deserialize
-├── cnpj.rs                # #[cfg(test)] — Cnpj::new, Display, serde
-├── cpf.rs                 # #[cfg(test)] — Cpf::new, CpfCnpj::new
-├── manifesto.rs           # #[cfg(test)] — TipoParceiro, CancelaManifestoDTO
-├── recebimento.rs         # #[cfg(test)] — TimestampMs, DTOs
-├── cdf.rs                 # #[cfg(test)] — FormatoDownload, validar_emissao
-├── logistica_reversa.rs   # #[cfg(test)] — DTOs, RastreioEvento
-├── integracao_estadual.rs # #[cfg(test)] — ParteMTR, ApiwsManifestoDTO
-└── tabelas.rs             # #[cfg(test)] — LazyLock maps, TipoAcondicionamento
-
 core/tests/
-└── integration_test.rs    # wiremock: simula API SINIR
+├── common/
+│   └── mod.rs              # Helpers: setup_sinir_server(), create_sinir_client(), json_response()
+├── domain_test.rs          # Testes unitários de validação (Cnpj, Cpf, DataMtr, etc.)
+├── openmtr_test.rs         # Smoke tests: builder, system, resposta
+├── wiremock_sinir.rs       # Consulta MTR com wiremock
+├── wiremock_sinir_errors.rs # Erro 404 + download PDF
+└── live_sinir_test.rs      # Testes contra API SINIR real (12 testes, pulam sem token)
 ```
 
-## Tests Unitários (inline)
+## Testes Unitários (inline)
 
-Testes de serialização, deserialização e validação vivem em `#[cfg(test)] mod tests`
-dentro de cada arquivo de schema. Zero mocking, testam apenas o tipo.
-
-Exemplo:
+Validação de newtypes e construção de tipos ficam nos próprios arquivos:
 
 ```rust
+// core/src/openmtr/domain/newtypes.rs
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn test_cnpj_valido() {
-        assert!(Cnpj::new("00.000.000/0001-91").is_ok());
-    }
-
+    fn test_cnpj_valido() { ... }
     #[test]
-    fn test_cnpj_display() {
-        let cnpj = Cnpj::new("11222333000181").unwrap();
-        assert_eq!(cnpj.to_string(), "11.222.333/0001-81");
-    }
+    fn test_cpf_valido() { ... }
+    #[test]
+    fn test_data_mtr_parse() { ... }
 }
 ```
 
-## Tests de Integração (wiremock)
+## Testes Wiremock
 
-Testes assíncronos com `wiremock` 0.6 simulando a API SINIR.
-Em `core/tests/integration_test.rs`:
+Simulam a API SINIR sem chamadas de rede reais:
 
 ```rust
-async fn setup() -> (MockServer, ManifestoService) {
-    let server = MockServer::start().await;
-    let config = MtrConfig {
-        base_url: server.uri(),
-        integration_token: "test-token".into(),
-        ..Default::default()
-    };
-    let client = MtrClient::new(config).unwrap();
-    let service = ManifestoService::new(client);
-
-    // Mock do endpoint /token (chamado automaticamente)
-    Mock::given(method("POST"))
-        .and(path("/token"))
-        .respond_with(json_response(200, json!({
-            "erro": false,
-            "objetoResposta": "Bearer token",
-            "totalRecords": 0,
-            "mensagem": null
-        })))
-        .mount(&server)
-        .await;
-
-    (server, service)
-}
-
 #[tokio::test]
-async fn test_manifesto_listar_ok() {
-    let (server, service) = setup().await;
+async fn test_sinir_consultar_mtr_com_lista() {
+    let server = common::setup_sinir_server().await;
     Mock::given(method("POST"))
         .and(path("/listaManifesto"))
-        .respond_with(json_response(200, json!({...})))
+        .respond_with(common::json_response(200, json!({...})))
         .mount(&server).await;
 
-    let result = service.listar(di, df, tipo, 0, 10).await;
-    assert!(result.is_ok());
+    let client = common::create_sinir_client(&server).await;
+    let resp = client.consultar_mtrs(&filtro).await;
+    assert!(resp.is_ok());
 }
 ```
 
-## Rodando
+## Testes Live
+
+Executam contra a API SINIR real. Pulam automaticamente se `OPENMTR_SINIR_TOKEN` não estiver configurado:
 
 ```bash
-cargo test                          # todos (40 unit + 2 integration)
-cargo test --test integration_test  # só wiremock
-cargo clippy                        # lints (must be 0 warnings)
+cp .env.example .env
+# edite .env com seu token real
+cargo test -p open-mtr-core --test live_sinir_test
 ```
+
+Cobertura: consulta, filtro por período, tabelas (resíduos, acondicionamentos, classes, etc.), download PDF, token inválido.

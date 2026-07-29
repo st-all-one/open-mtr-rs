@@ -1,129 +1,77 @@
-# Services
+# Adaptadores (MtrAdapter)
 
-Cada domínio tem um service em `core/src/services/`. Services são `#[derive(Clone)]` e `Send + Sync`.
+Não existe mais camada de services. Cada sistema implementa o trait `MtrAdapter`.
 
-## ManifestoService
-
-```rust
-pub async fn listar(di, df, tipo, page, size)
-    -> Result<(Vec<ManifestoResumo>, Option<i64>), MtrError>
-
-pub async fn listar_todos(di, df, tipo)
-    -> Result<Vec<ManifestoResumo>, MtrError>
-
-pub async fn cancelar(man_numero, justificativa)
-    -> Result<CancelamentoResponse, MtrError>
-
-pub async fn download_pdf(man_numero)
-    -> Result<Vec<u8>, MtrError>
-
-pub async fn salvar_pdf(man_numero, caminho)
-    -> Result<(), MtrError>
-```
-
-### ManifestoListBuilder (typestate)
+## Trait MtrAdapter
 
 ```rust
-ManifestoListBuilder<StFaltando>
-    .periodo(inicio, fim)   // valida fim >= inicio → StPronto
-    .tipo_parceiro(t)
-    .pagina(p)
-    .tamanho_pagina(s)
-    .build()                // só disponível em StPronto
-    → ApiwsListaManifestoDTO
+#[async_trait]
+pub(crate) trait MtrAdapter: Send + Sync {
+    fn system(&self) -> System;
+    fn nome(&self) -> &'static str;
+
+    // Auth
+    async fn autenticar_token(&self, ctx: &MtrCtx) -> Result<String, OpenMTRError>;
+    async fn autenticar_credenciais(&self, ctx: &MtrCtx, ...) -> Result<String, OpenMTRError>;
+
+    // 15 métodos de negócio (todos retornam LoteResult<T>)
+    async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError>;
+    async fn criar_mtrs(...) -> Result<LoteResult<MtrCriado>, OpenMTRError>;
+    async fn receber_mtrs(...) -> Result<LoteResult<MtrRecebido>, OpenMTRError>;
+    async fn cancelar_mtrs(...) -> Result<LoteResult<MtrCancelado>, OpenMTRError>;
+    async fn modificar_mtrs(...) -> Result<LoteResult<MtrModificado>, OpenMTRError>;
+    async fn download_mtrs(...) -> Result<LoteResult<DownloadItem>, OpenMTRError>;
+    async fn gerar_cdfs(...) -> Result<LoteResult<CdfEmitido>, OpenMTRError>;
+    async fn consultar_cdfs(...) -> Result<LoteResult<Cdf>, OpenMTRError>;
+    async fn download_cdfs(...) -> Result<LoteResult<DownloadItem>, OpenMTRError>;
+    async fn listar_residuos(...) -> Result<LoteResult<ResiduoIbama>, OpenMTRError>;
+    async fn listar_acondicionamentos(...) -> Result<LoteResult<Acondicionamento>, OpenMTRError>;
+    async fn listar_classes(...) -> Result<LoteResult<ClasseResiduo>, OpenMTRError>;
+    async fn listar_estados_fisicos(...) -> Result<LoteResult<EstadoFisico>, OpenMTRError>;
+    async fn listar_tratamentos(...) -> Result<LoteResult<TratamentoResiduo>, OpenMTRError>;
+    async fn listar_unidades(...) -> Result<LoteResult<UnidadeMedida>, OpenMTRError>;
+}
 ```
 
-## SalvarManifestoLoteBuilder (typestate)
+## LoteResult
 
-Em `services/salvar_manifesto.rs`:
+Operações em lote retornam `LoteResult<T>` que separa sucessos de erros:
 
 ```rust
-SalvarManifestoLoteBuilder<SemResiduos>
-    .identificacao(man_numero, data_emissao, ...)
-    .transportador(cnpj, razao_social, ...)
-    .add_residuo(...)      // transiciona para ComResiduos
-    .build()               // só em ComResiduos
+LoteResult<T> {
+    itens: Vec<ItemResult<T>>,
+}
+
+enum ItemResult<T> {
+    Ok(T),
+    Erro { indice: usize, problema: Problema },
+}
 ```
 
-## RecebimentoService
+## Implementação: SinirAdapter
+
+`SinirAdapter` (840 linhas) implementa todos os 16 métodos para o SINIR Nacional:
+
+- Usa `ctx.http.post::<Value, _>(path, &body, op)` para chamar endpoints SINIR
+- Converte manualmente entre JSON (`serde_json::Value`) e tipos de domínio
+- Funções auxiliares: `filtro_para_json()`, `json_para_mtr()`, `tem_erro()`, etc.
+
+## Criando um novo adapter
 
 ```rust
-pub async fn registrar_lote(itens)
-    -> Result<Vec<RecebimentoLoteItem>, MtrError>
+struct MeuAdapter;
 
-pub async fn solicitar_alteracao(payload)
-    -> Result<serde_json::Value, MtrError>
+#[async_trait]
+impl MtrAdapter for MeuAdapter {
+    fn system(&self) -> System { System::MtrPe }
+    fn nome(&self) -> &'static str { "MTR PE" }
 
-pub async fn aceitar_alteracao(payload)
-    -> Result<AceiteAlteracaoResponse, MtrError>
+    async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError> {
+        // 1. Montar requisição específica do sistema
+        // 2. ctx.http.post() ou ctx.http.get()
+        // 3. Converter resposta para domínio universal
+        // 4. Retornar LoteResult
+    }
+    // ... +15 métodos
+}
 ```
-
-## CdfService
-
-```rust
-pub async fn emitir(payload)
-    -> Result<CDFEmissaoObjeto, MtrError>
-
-pub async fn emitir_lr(payload)
-    -> Result<CDFEmissaoObjeto, MtrError>
-
-pub async fn download(cdf_codigo, formato)
-    -> Result<Vec<u8>, MtrError>
-
-pub async fn salvar(cdf_codigo, formato, caminho)
-    -> Result<(), MtrError>
-```
-
-## LogisticaReversaService
-
-```rust
-pub async fn listar_origem(di, df)
-    -> Result<Value, MtrError>
-
-pub async fn listar_processo(di, df)
-    -> Result<Value, MtrError>
-
-pub async fn obter_origem_completo(man_numero)
-    -> Result<MtrOrigemCompletoObjeto, MtrError>
-
-pub async fn obter_processo(man_numero)
-    -> Result<Value, MtrError>
-
-pub async fn alterar_titularidade(payload)
-    -> Result<Value, MtrError>
-```
-
-## IntegracaoEstadualService
-
-```rust
-pub async fn integrar_manifestos(manifestos)
-    -> Result<RespostaIntegracaoObjeto, MtrError>
-
-pub async fn integrar_recebimento(recebimento)
-    -> Result<Value, MtrError>
-```
-
-## TabelasService
-
-```rust
-pub async fn listar_todos()
-    -> Result<Vec<TipoAcondicionamento>, MtrError>
-
-pub async fn listar_por_estado_fisico(tie_codigo)
-    -> Result<Vec<TipoAcondicionamento>, MtrError>
-
-pub fn get_compativeis(tie_codigo) -> &'static [i32]
-
-pub fn get_nome_estado_fisico(tie_codigo) -> &'static str
-```
-
-Cache interno de 24h via `Arc<RwLock<Option<CacheEntry>>>`.
-
-## AuthService (deprecated)
-
-```rust
-#[deprecated]
-pub async fn autenticar(creds) -> Result<TokenObjeto, MtrError>
-```
-
-Use `MtrClient` direto com `integration_token`.

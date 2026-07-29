@@ -5,16 +5,16 @@ all: check napi python kotlin swift
 check:
 	cargo fmt --check
 	cargo clippy -- -D warnings
-	cargo check -p mtr-sinir-core
+	cargo check -p open-mtr-core
 
 core:
-	cargo check -p mtr-sinir-core
+	cargo check -p open-mtr-core
 
 napi:
 	cd napi && npm ci && npm run build
 
 uniffi:
-	cargo build -p mtr-sinir-uniffi --release
+	cargo build -p open-mtr-uniffi --release
 
 python: uniffi
 	uniffi-bindgen generate uniffi/src/mtr_sinir.udl --language python --out-dir bindings/python/

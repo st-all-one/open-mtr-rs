@@ -1,73 +1,92 @@
-# Error System
+# Sistema de Erros
 
-RFC 7807 (Problem Details) com UUID v7 para correlação distribuída.
+Dois tipos de erro seguindo RFC 9457 (Problem Details).
 
-## MtrError
+## OpenMTRError — Erro Catastrófico
+
+A requisição não completou. Usado no `Err()` do `Result`.
 
 ```rust
-pub enum MtrError {
-    Api { category, status, detail, instance, context },
-    Http(reqwest::Error),
-    RateLimited { retry_after, context },
-    Timeout { duration, context },
-    Serialization(serde_json::Error),
-    Config(String),
+pub struct OpenMTRError {
+    pub r#type: Url,        // urn:openmtr:error:{tipo}
+    pub title: String,       // "Erro de rede"
+    pub status: u16,         // 503
+    pub detail: String,      // "connection refused"
+    pub instance: Uuid,      // 019fae0a-...
 }
 ```
 
-## ErrorCategory
+### Construtores
 
-```rust
-pub enum ErrorCategory {
-    AuthenticationFailed,   // 401
-    AuthorizationDenied,    // 403
-    ResourceNotFound,       // 404
-    ValidationError,        // 422
-    Conflict,               // 409
-    RateLimited,            // 429
-    Timeout,                // 504
-    NetworkError,           // 503
-    ParseError,             // 500
-    InternalError,          // 500
+| Método | status | Uso |
+|--------|--------|-----|
+| `OpenMTRError::network("...")` | 503 | Falha de rede |
+| `OpenMTRError::timeout("...")` | 504 | Timeout |
+| `OpenMTRError::auth("...")` | 401 | Falha de autenticação |
+| `OpenMTRError::validation("...")` | 422 | Erro de validação |
+| `OpenMTRError::config("...")` | 500 | Erro de configuração |
+| `OpenMTRError::not_supported("...")` | 501 | Operação não suportada |
+| `OpenMTRError::new(status, title, detail)` | — | Genérico |
+
+### Serialização
+
+```json
+{
+  "type": "urn:openmtr:error:network",
+  "title": "Erro de rede",
+  "status": 503,
+  "detail": "connection refused",
+  "instance": "019fae0a-6c82-7840-a7d2-282ae8c71630"
 }
 ```
 
-## ErrorContext
+## Problema — Erro de Negócio
+
+A API respondeu mas recusou ou apontou inconsistência. Usado dentro de `Resposta.erros`.
 
 ```rust
-pub struct ErrorContext {
-    pub operation: Option<String>,
-    pub http_status: Option<u16>,
-    pub api_errors: Option<Vec<String>>,
-    pub response_body: Option<String>,
+pub struct Problema {
+    pub r#type: Url,
+    pub title: String,
+    pub status: u16,
+    pub detail: String,
+    pub instance: Uuid,
 }
 ```
 
-## Construtores
+### Construtores
 
-| Método | Uso |
-|--------|-----|
-| `MtrError::api(cat, status, detail, ctx)` | Erro da API |
-| `MtrError::validation(msg)` | Erro de validação |
-| `MtrError::config(msg)` | Erro de configuração |
-| `MtrError::deserialize(msg)` | Erro de parser |
-| `MtrError::timeout(duration, op)` | Timeout |
+| Método | status | Uso |
+|--------|--------|-----|
+| `Problema::validation("...")` | 422 | Validação |
+| `Problema::not_found("...")` | 404 | Não encontrado |
+| `Problema::api(status, "..." )` | — | Erro de API genérico |
+| `Problema::new(status, title, detail)` | — | Genérico |
 
-## Utilitários
+## Fluxo
 
-```rust
-err.category()      // → Option<ErrorCategory>
-err.is_retryable()  // → bool (429, 5xx, timeout)
+```
+Requisição
+  ├── Rede caiu / timeout / 401 sem refresh
+  │     └── Err(OpenMTRError)
+  │
+  ├── HTTP 200, API retornou erro(s)
+  │     └── Ok(Resposta { ok: true, erros: [Problema, ...] })
+  │
+  └── HTTP 200, sucesso
+        └── Ok(Resposta { ok: true, dados: [...], erros: [] })
 ```
 
 ## Exemplo
 
-```json
-{
-    "category": "validation-error",
-    "status": 422,
-    "detail": "Justificativa deve ter no mínimo 20 caracteres",
-    "instance": "0194b3e0-7f1a-7d80-8000-123456789abc",
-    "context": { "operation": "manifesto.cancelar" }
+```rust
+match mtr.consultar_mtrs(&filtro).await {
+    Ok(resp) => {
+        for m in &resp.dados { println!("OK: {}", m.numero); }
+        for e in &resp.erros { eprintln!("Erro: {}", e.detail); }
+    }
+    Err(cat) => {
+        eprintln!("Catastrófico: {} — {}", cat.title, cat.detail);
+    }
 }
 ```
