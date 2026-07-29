@@ -1,0 +1,21 @@
+[package]
+name = "mtr-sinir-napi"
+edition.workspace = true
+version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mtr-sinir-core = { path = "../core" }
+napi = { version = "2", features = ["async", "serde-json", "napi8"] }
+napi-derive = "2"
+serde_json.workspace = true
+tokio.workspace = true
+
+[build-dependencies]
+napi-build = "2"

@@ -1,0 +1,12 @@
+pub mod auth;
+pub mod cdf;
+pub mod cnpj;
+pub mod common;
+pub mod cpf;
+pub mod integracao_estadual;
+pub mod logistica_reversa;
+pub mod manifesto;
+pub mod recebimento;
+pub mod residuo;
+pub mod salvar_manifesto;
+pub mod tabelas;

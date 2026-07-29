@@ -1,0 +1,49 @@
+name: build
+on: [push, pull_request]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Check core
+        run: cargo check -p mtr-sinir-core
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build napi
+        run: cd napi && npm ci && npm run build
+
+      - name: Test napi
+        run: cd napi && npm test
+
+      - name: Build uniffi
+        run: cargo build -p mtr-sinir-uniffi --release
+
+      - name: Generate Python bindings
+        run: uniffi-bindgen generate uniffi/src/mtr_sinir.udl --language python --out-dir bindings/python/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.target }}
+          path: |
+            napi/*.node
+            napi/index.js
+            napi/index.d.ts
+            bindings/

@@ -1,0 +1,29 @@
+# Rust
+/target/
+Cargo.lock
+
+# Node / napi-rs
+node_modules/
+napi/index.js
+napi/index.d.ts
+napi/*.node
+napi/*.node.*
+
+# Python / UniFFI
+__pycache__/
+*.pyc
+bindings/
+*.egg-info/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+.env
+*.env.local

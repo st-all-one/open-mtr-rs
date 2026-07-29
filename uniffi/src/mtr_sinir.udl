@@ -1,0 +1,52 @@
+namespace mtr_sinir {
+  MtrSinirClient init(string integration_token, string base_url);
+};
+
+[Error]
+enum MtrError {
+  "Transport",
+  "Api",
+  "Validation",
+  "Deserialize",
+  "Internal",
+};
+
+interface MtrSinirClient {
+  [Throws=MtrError]
+  ListaManifestoResponse listar_manifestos(
+    string data_inicial,
+    string data_final,
+    i32 tipo_parceiro,
+    i32 page,
+    i32 size
+  );
+
+  [Throws=MtrError]
+  CancelamentoResponse cancelar_manifesto(
+    string man_numero,
+    string justificativa
+  );
+
+  [Throws=MtrError]
+  sequence<u8> download_pdf(string man_numero);
+};
+
+dictionary ListaManifestoResponse {
+  sequence<ManifestoResumo> content;
+  i32 total_pages;
+  i64 total_elements;
+  i32 page;
+  i32 page_size;
+};
+
+dictionary ManifestoResumo {
+  string man_numero;
+  string man_status;
+  string gerador;
+};
+
+dictionary CancelamentoResponse {
+  string man_numero;
+  string status;
+  string data_cancelamento;
+};
