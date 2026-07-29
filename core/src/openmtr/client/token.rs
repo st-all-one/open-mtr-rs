@@ -21,6 +21,14 @@ impl TokenManager {
         }
     }
 
+    pub fn from_cached(access_token: String, expires_at: Instant) -> Self {
+        Self {
+            integration_token: access_token.clone(),
+            cached: Some(CachedToken { access_token, expires_at }),
+            refresh_url: None,
+        }
+    }
+
     pub fn set_refresh_url(&mut self, url: impl Into<String>) {
         self.refresh_url = Some(url.into());
     }
@@ -51,13 +59,16 @@ impl TokenManager {
         &mut self,
         http: &reqwest::Client,
     ) -> Result<(), crate::openmtr::error::OpenMTRError> {
-        let url = self.refresh_url.as_deref().ok_or_else(|| {
+        // Clone data before .await to avoid holding a borrow of self across the await point,
+        // which would cause a poisoned lock if the task is cancelled.
+        let url = self.refresh_url.clone().ok_or_else(|| {
             crate::openmtr::error::OpenMTRError::network("Refresh URL not set")
         })?;
+        let integration_token = self.integration_token.clone();
 
         let resp = http
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.integration_token))
+            .post(&url)
+            .header("Authorization", format!("Bearer {integration_token}"))
             .send()
             .await
             .map_err(|e| crate::openmtr::error::OpenMTRError::network(e.to_string()))?;

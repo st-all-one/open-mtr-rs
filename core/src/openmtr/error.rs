@@ -1,10 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::fmt;
 use url::Url;
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("[{status}] {title} — {detail} (type: {type}, instance: {instance})")]
 pub struct OpenMTRError {
     pub r#type: Url,
     pub title: String,
@@ -96,18 +96,6 @@ impl OpenMTRError {
         }
     }
 }
-
-impl fmt::Display for OpenMTRError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{}] {} — {} (type: {}, instance: {})",
-            self.status, self.title, self.detail, self.r#type, self.instance
-        )
-    }
-}
-
-impl std::error::Error for OpenMTRError {}
 
 impl From<reqwest::Error> for OpenMTRError {
     fn from(err: reqwest::Error) -> Self {

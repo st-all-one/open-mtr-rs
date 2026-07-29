@@ -36,10 +36,10 @@
 openMTR
 └── OpenMtrClient (facade única — 16 métodos universais)
     └── MtrAdapter (trait interna — 1 implementação por sistema)
-        ├── SinirAdapter    → SINIR Nacional (✅ completo)
-        ├── SigorAdapter    → SIGOR / Ceará     (🚧 pendente)
-        ├── MtrPeAdapter    → MTR Pernambuco    (🚧 pendente)
-        └── ...             → +5 sistemas       (🚧 pendente)
+        ├── SinirAdapter    → SINIR Nacional  (✅ completo)
+        ├── MtrPeAdapter    → MTR Pernambuco  (✅ completo)
+        ├── SigorAdapter    → SIGOR / Ceará   (🚧 pendente)
+        └── ...             → +5 sistemas      (🚧 pendente)
 ```
 
 ### Camadas
@@ -100,7 +100,7 @@ open-mtr-core = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
-### Configuração:
+### Configuração — SINIR (token de integração):
 
 ```rust
 use open_mtr_core::*;
@@ -108,6 +108,27 @@ use open_mtr_core::*;
 let mtr = OpenMtrClient::builder()
     .base(System::Sinir)
     .token(std::env::var("OPENMTR_SINIR_TOKEN")?)
+    .build()
+    .await?;
+```
+
+### Configuração — MTR-PE (CPF + senha):
+
+```rust
+use open_mtr_core::*;
+
+// 1. Autentica com CPF+senha+unidade+CNPJ
+let token = OpenMtrAuthBuilder::default()
+    .base(System::MtrPe)
+    .credenciais("07800211428", "NORLU", 3623)
+    .cnpj("15805619000140")
+    .build()
+    .await?;
+
+// 2. Usa o token JWT obtido
+let mtr = OpenMtrClient::builder()
+    .base(System::MtrPe)
+    .token(&token)
     .build()
     .await?;
 ```
@@ -194,10 +215,10 @@ match mtr.consultar_mtrs(&filtro).await {
 ## 🗺️ Sistemas Suportados
 
 | Sistema | Status | Adapter | Base URL |
-|---|---|---|---|
+|---|---|---|---|---|
 | **SINIR Nacional** | ✅ Completo | `SinirAdapter` | `admin.sinir.gov.br/api` |
+| **MTR Pernambuco** | ✅ Completo | `MtrPeAdapter` | `mtr.cprh.pe.gov.br/api` |
 | SIGOR (Ceará) | 🚧 Pendente | — | — |
-| MTR Pernambuco | 🚧 Pendente | — | — |
 | MTR Ceará | 🚧 Pendente | — | — |
 | MTR São Paulo | 🚧 Pendente | — | — |
 | MTR Rio de Janeiro | 🚧 Pendente | — | — |
@@ -211,7 +232,12 @@ let mtr = OpenMtrClient::builder()
     .token("...")
     .build()
     .await?;
-// Todos os 16 métodos funcionam da mesma forma
+// Todos os 16 métodos funcionam da mesma forma — mesmo modelo de domínio
+
+// Exemplo: MTR-PE devolve dados tão ricos quanto SINIR
+println!("{}", mtr.dados[0].numero);           // 2114014590
+println!("{:?}", mtr.dados[0].gerador);        // Some(Parte { documento: 16.701.716/0034-14, unidade: 3581 })
+println!("{:?}", mtr.dados[0].residuos[0]);    // Residuo { codigo_ibama: "150103", quantidade: 2.54, ... }
 ```
 
 ---
@@ -248,11 +274,15 @@ let mtr = OpenMtrClient::builder()
 | `listar_tratamentos` | `Resposta<TratamentoResiduo>` | Tipos de tratamento |
 | `listar_unidades` | `Resposta<UnidadeMedida>` | Unidades de medida |
 
-### Autenticação Legado
+### Autenticação Legado (CPF + senha)
 
 | Método | Descrição |
 |---|---|
-| `OpenMtrAuth::builder().credenciais(cpf, senha, unidade).build()` | Para sistemas que exigem CPF+senha |
+| `OpenMtrAuthBuilder::default().credenciais(cpf, senha, unidade).cnpj(cnpj).build()` | Para sistemas que exigem CPF+senha (ex: MTR-PE) |
+
+> MTR-PE requer CPF, senha, código da unidade **e** CNPJ da empresa.
+> O token retornado deve ser passado via `.token()` ao `OpenMtrClient::builder()`.<br>
+> Token expira em 1 hora — é responsabilidade da aplicação reautenticar.
 
 ---
 
@@ -295,7 +325,7 @@ impl MtrAdapter for MtrPeAdapter {
 }
 ```
 
-### SinirAdapter (implementação de referência)
+### SinirAdapter (implementação de referência — SINIR Nacional)
 
 O adapter SINIR usa **3 rotas de consulta** otimizadas:
 
@@ -304,6 +334,20 @@ O adapter SINIR usa **3 rotas de consulta** otimizadas:
 | `numeros: ["N"]` | `GET /retornaManifesto/{N}` | ✅ Completo | ✅ Preenchido |
 | `periodo + detalhado: true` | `POST /listaManifesto` → extrai números → N× `GET /retornaManifesto/{N}` | ✅ Completo | ✅ Preenchido |
 | `periodo + detalhado: false` (ou omitido) | `POST /listaManifesto` | ❌ Vazio | ❌ `null` |
+
+### MtrPeAdapter (MTR Pernambuco)
+
+O MTR-PE difere do SINIR em vários aspectos — o adapter normaliza tudo:
+
+| Aspecto | SINIR | MTR-PE | OpenMTR (unificado) |
+|---|---|---|---|
+| **Partes** | `parceiroGerador: {parCnpj, parDescricao}` | `cnpGerador` + `codUnidadeGerador` (plano) | `gerador: Parte { documento, unidade }` |
+| **Nº MTR** | `manNumero` (string) | `manifestoCodigo` (integer) | `numero: String` |
+| **Datas** | Timestamp ms | String `yyyyMMdd` | `data_criacao: NaiveDate` |
+| **Itens** | `listaManifestoResiduo[]` c/ `resCodigoIbama` | `itemManifestoJSONs[]` c/ `residuo` | `residuos: Vec<Residuo>` |
+| **Wrapper** | `{erro, objetoResposta, mensagem}` | Array direto ou `{manifestoJSONDtos: [...]}` | `Resposta<T>` c/ envelope RFC 9457 |
+
+**Resultado:** MTR-PE preenche 10/18 campos do modelo unificado (vs 8/18 do SINIR em amostras reais), incluindo `motorista`, `placa` e `data_expedicao` que o SINIR frequentemente não devolve.
 
 ---
 
@@ -413,8 +457,10 @@ result = client.listar_manifestos('{"numeros": ["261032125684"]}')
 ## 🧪 Testes
 
 ```bash
-cargo test -p open-mtr-core                            # 99 testes
-cargo test -p open-mtr-core --test live_sinir_test     # testes contra API real
+cargo test -p open-mtr-core                              # testes unitários + wiremock
+cargo test -p open-mtr-core --test live_sinir_test       # SINIR real (requer token)
+cargo test -p open-mtr-core --test live_mtr_pe_consulta  # MTR-PE real (requer .env)
+cargo test -p open-mtr-core --test live_compare_systems  # ambos lado a lado
 ```
 
 ### Cobertura
@@ -424,14 +470,19 @@ cargo test -p open-mtr-core --test live_sinir_test     # testes contra API real
 | **Unitários** | 68 | Validação de newtypes, construção de `Resposta`, `Periodo`, serialização |
 | **Wiremock** | 8 | Consulta por número, consulta por período, erro 404, download PDF |
 | **OpenMtrClient** | 5 | Builder (sistema faltando, token faltando), `System::from_str` |
-| **Live (SINIR real)** | 14 | Consulta, filtros, tabelas, download, token inválido, detalhado |
+| **Live SINIR** | 14 | Consulta, filtros, tabelas, download, token inválido, detalhado |
+| **Live MTR-PE** | 1 | Consulta completa: 50 MTRs reais, validação de estrutura |
+| **Live comparativo** | 1 | Ambos sistemas lado a lado, métricas de preenchimento |
 
 ### Testes ao vivo
 
 ```bash
 cp .env.example .env
-# Preencha com seu integration_token do SINIR
+# SINIR: OPENMTR_SINIR_TOKEN
+# MTR-PE: MTR_PE_CNPJ, MTR_PE_CPF_USER, MTR_PE_PASSWORD, MTR_PE_UNITY
 cargo test -p open-mtr-core --test live_sinir_test
+cargo test -p open-mtr-core --test live_mtr_pe_consulta
+cargo test -p open-mtr-core --test live_compare_systems
 ```
 
 ---

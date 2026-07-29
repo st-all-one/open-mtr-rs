@@ -27,3 +27,4 @@ dist/
 # OS
 .env
 *.env.local
+conversations

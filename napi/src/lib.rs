@@ -5,7 +5,6 @@ use napi_derive::napi;
 use base64::Engine as _;
 
 fn convert_resposta<T: serde::Serialize>(resposta: Resposta<T>) -> RespostaJson {
-    let engine = base64::engine::general_purpose::STANDARD;
     RespostaJson {
         id: resposta.id.to_string(),
         ok: resposta.ok,

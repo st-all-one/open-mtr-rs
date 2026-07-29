@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use futures::future::join_all;
 use serde_json::{json, Value};
 use tracing::{info, info_span, warn};
 
-use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx};
+use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx, validate_download};
 use crate::openmtr::domain::{
     Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, Cnpj, CpfCnpj, CriarMtr,
     DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, FormatoDownload, GerarCdf,
@@ -750,25 +751,33 @@ impl MtrAdapter for SinirAdapter {
 
         let mut items = Vec::with_capacity(nums.len());
 
-        for (indice, numero) in nums.into_iter().enumerate() {
-            let path = format!("/downloadManifesto/{numero}");
-            match ctx.http.post_bytes(&path, "download_mtr").await {
-                Ok(buffer) => {
-                    items.push(ItemResult::Ok(DownloadItem {
-                        filename: format!("{numero}.pdf"),
-                        buffer,
-                        formato: "pdf".into(),
-                    }));
-                }
-                Err(e) => {
-                    warn!(numero = %numero, erro = %e, "Falha ao baixar MTR");
-                    items.push(ItemResult::Erro {
-                        indice,
-                        problema: Problema::api(502, e.to_string()),
-                    });
+        let tasks: Vec<_> = nums.into_iter().enumerate().map(|(indice, numero)| {
+            async move {
+                let path = format!("/downloadManifesto/{numero}");
+                match ctx.http.post_bytes(&path, "download_mtr").await {
+                    Ok(response) => {
+                        if let Some(problema) = validate_download(&response, "pdf") {
+                            ItemResult::Erro { indice, problema }
+                        } else {
+                            ItemResult::Ok(DownloadItem {
+                                filename: format!("{numero}.pdf"),
+                                buffer: response.bytes,
+                                formato: "pdf".into(),
+                            })
+                        }
+                    }
+                    Err(e) => {
+                        warn!(numero = %numero, erro = %e, "Falha ao baixar MTR");
+                        ItemResult::Erro {
+                            indice,
+                            problema: Problema::api(502, e.to_string()),
+                        }
+                    }
                 }
             }
-        }
+        }).collect();
+
+        items.extend(join_all(tasks).await);
 
         info!(total = %items.len(), "MTRs baixados");
         Ok(LoteResult::new(items))
@@ -842,33 +851,40 @@ impl MtrAdapter for SinirAdapter {
 
         let mut items = Vec::with_capacity(reqs.len());
 
-        for (indice, req) in reqs.into_iter().enumerate() {
-            let formato_str = match req.formato {
-                FormatoDownload::Pdf => "pdf",
-                FormatoDownload::Xml => "xml",
-            };
-            let path = format!(
-                "/downloadCertificado/{}?formato={}",
-                req.codigo, formato_str
-            );
-
-            match ctx.http.post_bytes(&path, "download_cdf").await {
-                Ok(buffer) => {
-                    items.push(ItemResult::Ok(DownloadItem {
-                        filename: format!("{}.{}", req.codigo, formato_str),
-                        buffer,
-                        formato: formato_str.into(),
-                    }));
-                }
-                Err(e) => {
-                    warn!(codigo = %req.codigo, erro = %e, "Falha ao baixar CDF");
-                    items.push(ItemResult::Erro {
-                        indice,
-                        problema: Problema::api(502, e.to_string()),
-                    });
+        let tasks: Vec<_> = reqs.into_iter().enumerate().map(|(indice, req)| {
+            async move {
+                let formato_str = match req.formato {
+                    FormatoDownload::Pdf => "pdf",
+                    FormatoDownload::Xml => "xml",
+                };
+                let path = format!(
+                    "/downloadCertificado/{}?formato={}",
+                    req.codigo, formato_str
+                );
+                match ctx.http.post_bytes(&path, "download_cdf").await {
+                    Ok(response) => {
+                        if let Some(problema) = validate_download(&response, formato_str) {
+                            ItemResult::Erro { indice, problema }
+                        } else {
+                            ItemResult::Ok(DownloadItem {
+                                filename: format!("{}.{}", req.codigo, formato_str),
+                                buffer: response.bytes,
+                                formato: formato_str.into(),
+                            })
+                        }
+                    }
+                    Err(e) => {
+                        warn!(codigo = %req.codigo, erro = %e, "Falha ao baixar CDF");
+                        ItemResult::Erro {
+                            indice,
+                            problema: Problema::api(502, e.to_string()),
+                        }
+                    }
                 }
             }
-        }
+        }).collect();
+
+        items.extend(join_all(tasks).await);
 
         info!(total = %items.len(), "CDFs baixados");
         Ok(LoteResult::new(items))

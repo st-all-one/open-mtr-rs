@@ -9,6 +9,52 @@ use crate::openmtr::config::Config;
 use crate::openmtr::client::token::TokenManager;
 use crate::openmtr::error::OpenMTRError;
 
+#[derive(Debug, Clone)]
+pub struct RawResponse {
+    pub bytes: Vec<u8>,
+    pub content_type: Option<String>,
+    pub content_length: Option<u64>,
+}
+
+impl RawResponse {
+    pub fn validate(&self, expected: &str) -> Result<(), String> {
+        if let Some(ref ct) = self.content_type {
+            let ct_lower = ct.to_lowercase();
+            if ct_lower.contains("text/html") || ct_lower.contains("text/plain") {
+                return Err(format!("Content-Type inesperado: {ct} (esperado {expected})"));
+            }
+            if expected == "xml" && !ct_lower.contains("xml") && !ct_lower.contains("octet-stream") {
+                return Err(format!("Content-Type inesperado: {ct} (esperado application/xml)"));
+            }
+        }
+
+        let magic_ok = match expected {
+            "pdf" => self.bytes.starts_with(b"%PDF"),
+            "xml" => {
+                self.bytes.starts_with(b"<?xml")
+                    || self.bytes.starts_with(b"<")
+            }
+            _ => true,
+        };
+        if !magic_ok {
+            return Err(format!(
+                "Arquivo inválido: magic bytes não correspondem ao formato {expected}"
+            ));
+        }
+
+        if let Some(cl) = self.content_length {
+            if cl != self.bytes.len() as u64 {
+                return Err(format!(
+                    "Content-Length ({cl}) difere dos bytes recebidos ({})",
+                    self.bytes.len()
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
 pub(crate) struct MtrHttpClient {
     http: Client,
     config: Config,
@@ -65,7 +111,7 @@ impl MtrHttpClient {
         &self,
         path: &str,
         op: &str,
-    ) -> Result<Vec<u8>, OpenMTRError> {
+    ) -> Result<RawResponse, OpenMTRError> {
         self.request_raw(Method::POST, path, op).await
     }
 
@@ -74,7 +120,7 @@ impl MtrHttpClient {
         &self,
         path: &str,
         op: &str,
-    ) -> Result<Vec<u8>, OpenMTRError> {
+    ) -> Result<RawResponse, OpenMTRError> {
         self.request_raw(Method::GET, path, op).await
     }
 
@@ -206,7 +252,7 @@ impl MtrHttpClient {
         method: Method,
         path: &str,
         op: &str,
-    ) -> Result<Vec<u8>, OpenMTRError> {
+    ) -> Result<RawResponse, OpenMTRError> {
         let start = Instant::now();
         let url = format!("{}{}", self.config.base_url, path);
 
@@ -250,11 +296,26 @@ impl MtrHttpClient {
                                     duration_ms = %elapsed.as_millis(),
                                     "Request succeeded after token refresh"
                                 );
-                                return retry_resp
+                                let content_type = retry_resp
+                                    .headers()
+                                    .get(reqwest::header::CONTENT_TYPE)
+                                    .and_then(|v| v.to_str().ok())
+                                    .map(|s| s.to_string());
+                                let content_length = retry_resp
+                                    .headers()
+                                    .get(reqwest::header::CONTENT_LENGTH)
+                                    .and_then(|v| v.to_str().ok())
+                                    .and_then(|s| s.parse::<u64>().ok());
+                                let bytes = retry_resp
                                     .bytes()
                                     .await
                                     .map(|b| b.to_vec())
-                                    .map_err(|e| OpenMTRError::network(e.to_string()));
+                                    .map_err(|e| OpenMTRError::network(e.to_string()))?;
+                                return Ok(RawResponse {
+                                    bytes,
+                                    content_type,
+                                    content_length,
+                                });
                             }
                             let status_code = retry_resp.status();
                             let body_text = retry_resp.text().await.unwrap_or_default();
@@ -272,11 +333,26 @@ impl MtrHttpClient {
                             duration_ms = %elapsed.as_millis(),
                             "Request succeeded"
                         );
-                        return resp
+                        let content_type = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_TYPE)
+                            .and_then(|v| v.to_str().ok())
+                            .map(|s| s.to_string());
+                        let content_length = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_LENGTH)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|s| s.parse::<u64>().ok());
+                        let bytes = resp
                             .bytes()
                             .await
                             .map(|b| b.to_vec())
-                            .map_err(|e| OpenMTRError::network(e.to_string()));
+                            .map_err(|e| OpenMTRError::network(e.to_string()))?;
+                        return Ok(RawResponse {
+                            bytes,
+                            content_type,
+                            content_length,
+                        });
                     }
 
                     if should_retry && (status.as_u16() == 429 || status.as_u16() >= 500) {
@@ -316,6 +392,20 @@ impl MtrHttpClient {
         }
     }
 
+    pub async fn set_token_direct(&self, jwt: &str) {
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let ttl = crate::openmtr::client::token::TokenManager::extract_expiry(jwt)
+            .map(|exp| exp.saturating_sub(now_secs))
+            .unwrap_or(3600);
+        let safe = ttl.saturating_sub(60);
+        let expires = std::time::Instant::now() + std::time::Duration::from_secs(safe);
+        let mut mgr = self.token_mgr.write().await;
+        *mgr = crate::openmtr::client::token::TokenManager::from_cached(jwt.to_string(), expires);
+    }
+
     pub async fn set_refresh_url(&self, url: &str) {
         let mut mgr = self.token_mgr.write().await;
         mgr.set_refresh_url(url);
@@ -324,6 +414,37 @@ impl MtrHttpClient {
     pub async fn refresh_token(&self) -> Result<(), OpenMTRError> {
         let mut mgr = self.token_mgr.write().await;
         mgr.refresh(&self.http).await
+    }
+
+    pub async fn post_public<B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+        op: &str,
+    ) -> Result<serde_json::Value, OpenMTRError> {
+        let url = format!("{}{}", self.config.base_url, path);
+        let resp = self
+            .http
+            .post(&url)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    OpenMTRError::timeout(format!("{op} timed out"))
+                } else {
+                    OpenMTRError::network(e.to_string())
+                }
+            })?;
+        let status = resp.status();
+        if status.is_success() {
+            resp.json::<serde_json::Value>()
+                .await
+                .map_err(|e| OpenMTRError::parse_error(e.to_string()))
+        } else {
+            let body_text = resp.text().await.unwrap_or_default();
+            Err(map_http_error(status, &body_text))
+        }
     }
 
     pub async fn get_token(&self) -> Result<String, OpenMTRError> {

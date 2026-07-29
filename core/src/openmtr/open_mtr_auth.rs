@@ -19,6 +19,7 @@ pub struct OpenMtrAuthBuilder {
     senha: Option<String>,
     unidade: Option<u32>,
     timeout: Option<Duration>,
+    cnpj: Option<String>,
 }
 
 impl OpenMtrAuthBuilder {
@@ -36,6 +37,11 @@ impl OpenMtrAuthBuilder {
         self.cpf = Some(cpf.into());
         self.senha = Some(senha.into());
         self.unidade = Some(unidade);
+        self
+    }
+
+    pub fn cnpj(mut self, cnpj: impl Into<String>) -> Self {
+        self.cnpj = Some(cnpj.into());
         self
     }
 
@@ -69,12 +75,15 @@ impl OpenMtrAuthBuilder {
         );
 
         let adapter = system.adapter()?;
-        let config = crate::openmtr::config::Config::builder()
+        let mut config_builder = crate::openmtr::config::Config::builder()
             .system(system)
             .base_url(base_url)
             .timeout_secs(self.timeout.map(|d| d.as_secs()).unwrap_or(60))
-            .max_rps(10)
-            .build()?;
+            .max_rps(10);
+        if let Some(ref cnpj) = self.cnpj {
+            config_builder = config_builder.cnpj(cnpj);
+        }
+        let config = config_builder.build()?;
 
         let http = crate::openmtr::client::http::MtrHttpClient::new(config.clone())?;
 

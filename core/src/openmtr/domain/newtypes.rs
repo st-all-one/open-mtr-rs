@@ -271,6 +271,101 @@ impl<'de> Deserialize<'de> for TimestampMs {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct Quantidade(f64);
+
+impl Quantidade {
+    pub fn new(valor: f64) -> Result<Self, crate::openmtr::error::OpenMTRError> {
+        if valor < 0.0 {
+            return Err(crate::openmtr::error::OpenMTRError::validation(
+                format!("Quantidade não pode ser negativa: {valor}"),
+            ));
+        }
+        if valor > 1_000_000_000.0 {
+            return Err(crate::openmtr::error::OpenMTRError::validation(
+                format!("Quantidade acima do limite: {valor}"),
+            ));
+        }
+        Ok(Self(valor))
+    }
+
+    pub fn new_unchecked(valor: f64) -> Self {
+        Self(valor)
+    }
+
+    pub fn get(&self) -> f64 { self.0 }
+}
+
+impl fmt::Display for Quantidade {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CodigoIbama(String);
+
+impl CodigoIbama {
+    pub fn new(digits: &str) -> Result<Self, crate::openmtr::error::OpenMTRError> {
+        let cleaned: String = digits.chars().filter(|c| c.is_ascii_digit()).collect();
+        if cleaned.len() != 6 && cleaned.len() != 8 {
+            return Err(crate::openmtr::error::OpenMTRError::validation(
+                format!("Código IBAMA deve ter 6 ou 8 dígitos: {digits}"),
+            ));
+        }
+        Ok(Self(cleaned))
+    }
+
+    pub fn parse_unchecked(s: &str) -> Self {
+        Self(s.to_string())
+    }
+
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+
+impl fmt::Display for CodigoIbama {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlacaVeiculo(String);
+
+impl PlacaVeiculo {
+    pub fn new(s: &str) -> Result<Self, crate::openmtr::error::OpenMTRError> {
+        let upper = s.to_uppercase();
+        // Aceita formato ABC1D23 (mercosul) ou ABC-1234 (antigo)
+        let is_mercosul = upper.len() == 7
+            && upper.chars().take(3).all(|c| c.is_ascii_alphabetic())
+            && upper.chars().nth(3).map_or(false, |c| c.is_ascii_digit())
+            && upper.chars().nth(4).map_or(false, |c| c.is_ascii_alphabetic())
+            && upper.chars().skip(5).all(|c| c.is_ascii_digit());
+        let is_antiga = upper.len() == 8
+            && upper.chars().take(3).all(|c| c.is_ascii_alphabetic())
+            && upper.chars().nth(3) == Some('-')
+            && upper.chars().skip(4).all(|c| c.is_ascii_digit());
+        if !is_mercosul && !is_antiga {
+            return Err(crate::openmtr::error::OpenMTRError::validation(
+                format!("Placa inválida: {s} (use ABC1D23 ou ABC-1234)"),
+            ));
+        }
+        Ok(Self(upper))
+    }
+
+    pub fn parse_unchecked(s: &str) -> Self {
+        Self(s.to_uppercase())
+    }
+
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+
+impl fmt::Display for PlacaVeiculo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

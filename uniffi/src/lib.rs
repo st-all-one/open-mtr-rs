@@ -180,11 +180,6 @@ impl OpenMtrClient {
         let resposta = blk!(self.inner.listar_unidades());
         to_json(&resposta)
     }
-
-    // ─── Conveniência ──────────────────────────────────────────────────
-
-    pub fn download_pdf(&self, numero: String) -> Result<Vec<u8>, OpenMtrError> {
-        let mut resposta = blk!(self.inner.download_mtrs(vec![numero]));
-        resposta.dados.pop().map(|item| item.buffer).ok_or(OpenMtrError::Api)
-    }
 }
+
+

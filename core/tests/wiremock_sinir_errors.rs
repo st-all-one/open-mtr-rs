@@ -31,7 +31,7 @@ async fn test_sinir_erro_404() {
 #[tokio::test]
 async fn test_sinir_download_mtr_pdf() {
     let server = common::setup_sinir_server().await;
-    let pdf_bytes = vec![0x25, 0x50, 0x44, 0x46, 0x2d]; // %PDF-
+    let pdf_bytes: Vec<u8> = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\ntrailer\n<< /Size 4 >>\nstartxref\n150\n%%EOF\n".to_vec();
 
     Mock::given(method("POST"))
         .and(path("/downloadManifesto/123456"))

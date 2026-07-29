@@ -22,7 +22,7 @@ impl System {
         match self {
             Self::Sinir => "https://admin.sinir.gov.br/api",
             Self::Sigor => "https://sigor.mtr.ce.gov.br/api",
-            Self::MtrPe => "https://mtr.pe.gov.br/api",
+            Self::MtrPe => "https://mtr.cprh.pe.gov.br/api",
             Self::MtrCe => "https://mtr.ce.gov.br/api",
             Self::MtrSp => "https://mtr.sp.gov.br/api",
             Self::MtrRj => "https://mtr.rj.gov.br/api",
@@ -34,6 +34,7 @@ impl System {
     pub(crate) fn adapter(self) -> Result<Box<dyn crate::openmtr::adapters::MtrAdapter>, OpenMTRError> {
         match self {
             Self::Sinir => Ok(Box::new(crate::openmtr::adapters::sinir::SinirAdapter)),
+            Self::MtrPe => Ok(Box::new(crate::openmtr::adapters::mtr_pe::MtrPeAdapter)),
             other => Err(OpenMTRError::not_supported(
                 &format!("adapter para {} ainda não implementado", other.nome()),
             )),
@@ -86,7 +87,7 @@ mod tests {
     fn test_default_base_urls() {
         assert!(System::Sinir.default_base_url().contains("sinir"));
         assert!(System::Sigor.default_base_url().contains("sigor"));
-        assert!(System::MtrPe.default_base_url().contains("mtr.pe"));
+        assert!(System::MtrPe.default_base_url().contains("cprh.pe"));
         assert!(System::MtrCe.default_base_url().contains("mtr.ce"));
         assert!(System::MtrSp.default_base_url().contains("mtr.sp"));
         assert!(System::MtrRj.default_base_url().contains("mtr.rj"));

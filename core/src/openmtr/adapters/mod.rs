@@ -8,7 +8,7 @@ use crate::openmtr::domain::{
 };
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::config::Config;
-use crate::openmtr::client::http::MtrHttpClient;
+use crate::openmtr::client::http::{MtrHttpClient, RawResponse};
 use crate::openmtr::resposta::Problema;
 use crate::openmtr::system::System;
 
@@ -173,4 +173,24 @@ pub(crate) trait MtrAdapter: Send + Sync {
     ) -> Result<LoteResult<UnidadeMedida>, OpenMTRError>;
 }
 
+pub(crate) fn validate_download(response: &RawResponse, expected: &str) -> Option<Problema> {
+    if response.bytes.is_empty() {
+        return Some(Problema::validation("Download retornou arquivo vazio"));
+    }
+
+    if response.bytes.len() < 100 {
+        return Some(Problema::validation(format!(
+            "Arquivo muito pequeno ({} bytes) para ser um {expected} válido",
+            response.bytes.len()
+        )));
+    }
+
+    if let Err(msg) = response.validate(expected) {
+        return Some(Problema::validation(msg));
+    }
+
+    None
+}
+
 pub(crate) mod sinir;
+pub(crate) mod mtr_pe;

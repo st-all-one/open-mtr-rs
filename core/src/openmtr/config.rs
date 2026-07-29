@@ -15,6 +15,7 @@ pub(crate) struct Config {
     pub timeout: Duration,
     #[allow(dead_code)]
     pub max_rps: u32,
+    pub cnpj: Option<String>,
 }
 
 impl Config {
@@ -25,6 +26,7 @@ impl Config {
             integration_token: None,
             timeout: Duration::from_secs(30),
             max_rps: 10,
+            cnpj: None,
         }
     }
 }
@@ -36,6 +38,7 @@ pub(crate) struct ConfigBuilder {
     integration_token: Option<String>,
     timeout: Duration,
     max_rps: u32,
+    cnpj: Option<String>,
 }
 
 impl ConfigBuilder {
@@ -64,6 +67,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn cnpj(mut self, cnpj: impl Into<String>) -> Self {
+        self.cnpj = Some(cnpj.into());
+        self
+    }
+
     pub fn build(self) -> Result<Config, OpenMTRError> {
         let base_url = self
             .base_url
@@ -79,6 +87,7 @@ impl ConfigBuilder {
             integration_token: self.integration_token,
             timeout: self.timeout,
             max_rps: self.max_rps,
+            cnpj: self.cnpj,
         };
 
         tracing::info!(system = %config.system, base_url = %config.base_url, "Config built");
@@ -92,6 +101,7 @@ pub struct Credenciais {
     pub cpf: Cpf,
     pub senha: String,
     pub unidade: u32,
+    pub cnpj: String,
 }
 
 #[cfg(test)]
@@ -143,7 +153,7 @@ mod tests {
     #[test]
     fn test_credenciais() {
         let cpf = Cpf::new("12345678909").expect("valid cpf");
-        let cred = Credenciais { cpf: cpf.clone(), senha: "secret".into(), unidade: 1 };
+        let cred = Credenciais { cpf: cpf.clone(), senha: "secret".into(), unidade: 1, cnpj: String::new() };
         assert_eq!(cred.cpf.as_str(), "12345678909");
         assert_eq!(cred.senha, "secret");
         assert_eq!(cred.unidade, 1);

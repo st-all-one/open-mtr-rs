@@ -27,6 +27,8 @@ pub struct CriarMtr {
     pub armazenador_temporario: Option<Parte>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tipo_manifesto: Option<TipoManifesto>,
+    pub cargo: Option<String>,
+    pub codigo_referencia: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
