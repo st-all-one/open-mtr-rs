@@ -111,8 +111,8 @@ O adapter preenche **15+ dos 18 campos** do `Mtr` unificado:
 | `classe_risco` | ✅ |
 | `nome_embarque` | ✅ |
 | `grupo_embalagem` | ✅ |
-| `codigo_interno` | ✅ |
-| `descricao_interna` | ✅ |
+| `codigo_interno` | ✅ (fallback `codigolinterno` — typos reais da API) |
+| `descricao_interna` | ✅ (fallback `descricaolnterna` — typos reais da API) |
 
 ## Endpoints Mapeados
 
@@ -142,14 +142,14 @@ O adapter preenche **15+ dos 18 campos** do `Mtr` unificado:
 
 ## Exemplo de Uso
 
+### Autenticação por token de integração (JWT direto)
+
 ```rust
 use open_mtr_core::*;
 
-// Autenticação por credenciais
-let client = OpenMtrClientBuilder::default()
+let client = OpenMtrClient::builder()
     .base(System::Sigor)
-    .credenciais("07800211428", "a34r3e", 189788)
-    .cnpj("64229681000147")
+    .token("eyJhbGciOiJIUzUxMiJ9...")
     .build()
     .await?;
 
@@ -170,6 +170,26 @@ for m in &resp.dados {
 }
 ```
 
+### Autenticação por CPF + senha (credenciais legado)
+
+```rust
+use open_mtr_core::*;
+
+// 1. Obtém o token via credenciais
+let token = OpenMtrAuthBuilder::default()
+    .base(System::Sigor)
+    .credenciais("07800211428", "a34r3e", 189788)
+    .build()
+    .await?;
+
+// 2. Usa o token no cliente
+let client = OpenMtrClient::builder()
+    .base(System::Sigor)
+    .token(&token)
+    .build()
+    .await?;
+```
+
 ## Códigos de Situação do Manifesto
 
 | Descrição | Status |
@@ -180,8 +200,46 @@ for m in &resp.dados {
 | Cancelado | `StatusMtr::Cancelado` |
 | Expirado | `StatusMtr::Expirado` |
 
+## Métodos Específicos do SIGOR
+
+Além dos 16 métodos universais, o SIGOR expõe endpoints próprios acessíveis via `OpenMtrClient`:
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `listar_classes_por_residuo(codigo)` | `GET /retornaListaClassePorResiduo/{cod}` | Classes compatíveis com um resíduo |
+| `listar_acondicionamentos_por_estado_fisico(codigo)` | `GET /retornaListaAcondicionamentoPorEstadoFisico/{cod}` | Acondicionamentos p/ estado físico |
+| `consultar_mtr_por_codigo_referencia(unidade, codigo)` | `POST /retornaManifestoSeuCodigo` | Busca MTR pelo código de referência |
+| `criar_manifesto_complementar(req)` | `POST /salvarManifestoComplementar` | Cria manifesto complementar |
+
+```rust
+// Exemplo: consultar por código de referência
+let mtr = client.consultar_mtr_por_codigo_referencia(189788, "abc123").await?;
+```
+
+## Diferenças de Implementação vs SINIR/MTR-PE
+
+| Aspecto | SIGOR | SINIR | MTR-PE |
+|---------|-------|-------|--------|
+| Método listagens | **GET** | GET | POST |
+| Autenticação token | `integration_token` direto | Refresh automático via `/token` | `integration_token` direto |
+| Recebimento exige motorista/placa | ✅ Sim (opcional no domínio) | ❌ Não | ❌ Não |
+| Cancelamento em lote | POST `/cancelarManifestoLote` | Individual apenas | Individual apenas |
+| Listar classes por resíduo | ✅ Sim | ❌ Não | ❌ Não |
+| Manifesto complementar | ✅ Sim | ❌ Não | ❌ Não |
+
+## Gaps Conhecidos
+
+| Gap | Impacto | Motivo |
+|-----|---------|--------|
+| `consulta por período` | Não implementada | SIGOR não expõe endpoint de lista por período |
+| `consultar_cdfs` | Não implementado | SIGOR não possui endpoint de consulta de CDFs |
+| `motorista`/`placa` no recebimento | Fallback "Motorista"/"ABC1234" se não informado | Campo opcional no `ReceberMtr` |
+
+
 ## Arquivos
 
 - `core/src/openmtr/adapters/sigor.rs` — Implementação do adapter (~820 linhas)
 - `wiki/sigor/WebService.md` — Documentação corrigida da API
-- `core/tests/live_sigor_discovery.rs` — Testes de descoberta contra API real
+- `core/src/openmtr/adapters/mod.rs` — Trait `MtrAdapter` com métodos específicos SIGOR
+- `core/src/openmtr/system.rs` — Registro do sistema `System::Sigor`
+- `core/src/openmtr/open_mtr_client.rs` — Fachada com métodos específicos SIGOR

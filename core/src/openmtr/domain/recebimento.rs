@@ -12,6 +12,10 @@ pub struct ReceberMtr {
     pub responsavel: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub observacoes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motorista: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placa_veiculo: Option<String>,
     #[serde(default)]
     pub residuos_recebidos: Vec<ResiduoRecebido>,
 }

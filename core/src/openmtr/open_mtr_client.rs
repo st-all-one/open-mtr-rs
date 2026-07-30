@@ -4,10 +4,10 @@ use tracing::{info, error, info_span};
 use uuid::Uuid;
 
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, CriarMtr, CriarMtrComplementar,
-    DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
-    ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado, MtrRecebido, ReceberMtr,
-    ResiduoIbama, TratamentoResiduo, UnidadeMedida,
+    AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
+    ClasseResiduo, CriarMtr, CriarMtrComplementar, DownloadCdf, DownloadItem, EstadoFisico,
+    FiltroCdf, FiltroMtr, GerarCdf, ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado,
+    MtrRecebido, ReceberMtr, ResiduoIbama, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::resposta::{Problema, Resposta};
@@ -81,6 +81,10 @@ impl OpenMtrClient {
 
     pub async fn modificar_mtrs(&self, reqs: Vec<ModificarMtr>) -> MtrResult<MtrModificado> {
         self.exec_lote("modificar_mtrs", self.adapter.modificar_mtrs(&self.ctx, reqs)).await
+    }
+
+    pub async fn aceitar_alteracoes(&self, reqs: Vec<AceitarAlteracao>) -> MtrResult<AlteracaoAceita> {
+        self.exec_lote("aceitar_alteracoes", self.adapter.aceitar_alteracoes(&self.ctx, reqs)).await
     }
 
     pub async fn download_mtrs(&self, nums: Vec<String>) -> MtrResult<DownloadItem> {

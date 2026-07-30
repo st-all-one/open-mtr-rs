@@ -5,11 +5,11 @@ use tracing::{info, info_span, warn};
 
 use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx, validate_download};
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, Cnpj, CpfCnpj, CriarMtr,
-    DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, FormatoDownload, GerarCdf,
-    ModificacaoTipo, ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado, MtrRecebido, Parte,
-    ReceberMtr, Residuo, ResiduoCriacao, ResiduoIbama, ResiduoRecebido, StatusMtr, TipoParte,
-    TratamentoResiduo, UnidadeMedida,
+    AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
+    ClasseResiduo, Cnpj, CpfCnpj, CriarMtr, DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf,
+    FiltroMtr, FormatoDownload, GerarCdf, ModificacaoTipo, ModificarMtr, Mtr, MtrCancelado,
+    MtrCriado, MtrModificado, MtrRecebido, Parte, ReceberMtr, Residuo, ResiduoCriacao,
+    ResiduoIbama, ResiduoRecebido, StatusMtr, TipoParte, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::resposta::Problema;
@@ -755,6 +755,46 @@ impl MtrAdapter for SinirAdapter {
         }
 
         info!(total = %itens.len(), "MTRs modificados");
+        Ok(LoteResult::new(itens))
+    }
+
+    async fn aceitar_alteracoes(
+        &self,
+        ctx: &MtrCtx,
+        reqs: Vec<AceitarAlteracao>,
+    ) -> Result<LoteResult<AlteracaoAceita>, OpenMTRError> {
+        let _span = info_span!("sinir.aceitar_alteracoes");
+        let mut itens = Vec::with_capacity(reqs.len());
+
+        for (indice, req) in reqs.into_iter().enumerate() {
+            let body = json!({
+                "manNumero": req.numero,
+                "aceite": req.aceitar,
+            });
+
+            match ctx.http.post::<Value, _>("/aceiteAlteracaoRecebimento", &body, "aceitar_alteracao").await {
+                Ok(resp) => {
+                    if tem_erro(&resp) {
+                        let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or("Erro no aceite");
+                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
+                        continue;
+                    }
+                    let aceita = resp.get("alteracaoAceita").and_then(|b| b.as_bool()).unwrap_or(false);
+                    let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string();
+                    itens.push(ItemResult::Ok(AlteracaoAceita {
+                        numero: req.numero,
+                        aceita,
+                        mensagem: msg,
+                    }));
+                }
+                Err(e) => {
+                    warn!(erro = %e, "Falha ao aceitar alteração no SINIR");
+                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                }
+            }
+        }
+
+        info!(total = %itens.len(), "Alterações aceitas/recusadas");
         Ok(LoteResult::new(itens))
     }
 

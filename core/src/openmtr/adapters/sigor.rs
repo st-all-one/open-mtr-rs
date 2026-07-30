@@ -5,11 +5,11 @@ use tracing::{info, info_span, warn};
 
 use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx, validate_download};
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, Cnpj, CpfCnpj, CriarMtr,
-    CriarMtrComplementar, DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr,
-    GerarCdf, ModificacaoTipo, ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado,
-    MtrRecebido, Parte, ReceberMtr, Residuo, ResiduoCriacao, ResiduoIbama,
-    StatusMtr, TratamentoResiduo, UnidadeMedida,
+    AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
+    ClasseResiduo, Cnpj, CpfCnpj, CriarMtr, CriarMtrComplementar, DownloadCdf, DownloadItem,
+    EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf, ModificacaoTipo, ModificarMtr, Mtr,
+    MtrCancelado, MtrCriado, MtrModificado, MtrRecebido, Parte, ReceberMtr, Residuo,
+    ResiduoCriacao, ResiduoIbama, StatusMtr, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::resposta::Problema;
@@ -414,8 +414,8 @@ impl MtrAdapter for SigorAdapter {
             let body = json!([{
                 "manNumero": receber.numero,
                 "dataRecebimento": receber.data_recebimento.and_utc().timestamp_millis(),
-                "nomeMotorista": "Motorista",
-                "placaVeiculo": "ABC1234",
+                "nomeMotorista": receber.motorista.as_deref().unwrap_or("Motorista"),
+                "placaVeiculo": receber.placa_veiculo.as_deref().unwrap_or("ABC1234"),
                 "nomeResponsavelRecebimento": receber.responsavel,
                 "observacoes": receber.observacoes,
                 "listaManifestoResiduo": items,
@@ -820,5 +820,43 @@ impl MtrAdapter for SigorAdapter {
             }
             None => Err(OpenMTRError::validation("Resposta vazia do manifesto complementar")),
         }
+    }
+
+    async fn aceitar_alteracoes(
+        &self,
+        ctx: &MtrCtx,
+        reqs: Vec<AceitarAlteracao>,
+    ) -> Result<LoteResult<AlteracaoAceita>, OpenMTRError> {
+        let _span = info_span!("sigor.aceitar_alteracoes");
+        let mut itens = Vec::with_capacity(reqs.len());
+
+        for (indice, req) in reqs.into_iter().enumerate() {
+            let body = json!({
+                "parCodigoGerador": req.codigo_gerador.unwrap_or(0),
+                "manNumero": req.numero,
+                "aceite": if req.aceitar { "a" } else { "r" },
+            });
+
+            match ctx.http.post::<Value, _>("/aceiteAlteracaoRecebimento", &body, "aceitar_alteracao").await {
+                Ok(resp) => {
+                    let erro = tem_erro(&resp);
+                    let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or_default();
+                    if !erro {
+                        itens.push(ItemResult::Ok(AlteracaoAceita {
+                            numero: req.numero,
+                            aceita: req.aceitar,
+                            mensagem: msg.to_string(),
+                        }));
+                    } else {
+                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
+                    }
+                }
+                Err(e) => {
+                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                }
+            }
+        }
+
+        Ok(LoteResult::new(itens))
     }
 }

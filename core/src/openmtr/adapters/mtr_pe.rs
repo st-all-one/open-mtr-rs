@@ -5,10 +5,11 @@ use tracing::{info, info_span, warn};
 
 use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx, validate_download};
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, Cnpj, CpfCnpj, CriarMtr,
-    DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
-    ModificacaoTipo, ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado, MtrRecebido,
-    Parte, ReceberMtr, Residuo, ResiduoIbama, StatusMtr, TratamentoResiduo, UnidadeMedida,
+    AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
+    ClasseResiduo, Cnpj, CpfCnpj, CriarMtr, DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf,
+    FiltroMtr, GerarCdf, ModificacaoTipo, ModificarMtr, Mtr, MtrCancelado, MtrCriado,
+    MtrModificado, MtrRecebido, Parte, ReceberMtr, Residuo, ResiduoIbama, StatusMtr,
+    TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::resposta::Problema;
@@ -537,6 +538,45 @@ impl MtrAdapter for MtrPeAdapter {
                             req.tipo
                         )),
                     });
+                }
+            }
+        }
+
+        Ok(LoteResult::new(itens))
+    }
+
+    async fn aceitar_alteracoes(
+        &self,
+        ctx: &MtrCtx,
+        reqs: Vec<AceitarAlteracao>,
+    ) -> Result<LoteResult<AlteracaoAceita>, OpenMTRError> {
+        let _span = info_span!("mtr_pe.aceitar_alteracoes");
+        let mut itens = Vec::with_capacity(reqs.len());
+
+        for (indice, req) in reqs.into_iter().enumerate() {
+            let num = req.numero.parse::<i64>().unwrap_or(0);
+            let body = json!({
+                "codigoManifesto": num,
+                "aceite": if req.aceitar { "S" } else { "N" },
+            });
+
+            match ctx.http.post::<Value, _>("/aceiteAlteracaoRecebimento", &body, "aceitar_alteracao").await {
+                Ok(resp) => {
+                    let retorno_codigo = resp.get("retornoCodigo").and_then(|n| n.as_i64()).unwrap_or(999);
+                    let msg = resp.get("retorno").and_then(|s| s.as_str()).unwrap_or_default().to_string();
+                    if retorno_codigo == 0 {
+                        itens.push(ItemResult::Ok(AlteracaoAceita {
+                            numero: req.numero,
+                            aceita: req.aceitar,
+                            mensagem: msg,
+                        }));
+                    } else {
+                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
+                    }
+                }
+                Err(e) => {
+                    warn!(erro = %e, "Falha ao aceitar alteração no MTR-PE");
+                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
                 }
             }
         }

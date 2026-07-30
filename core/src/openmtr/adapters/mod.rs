@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, CriarMtr, CriarMtrComplementar,
-    DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
-    ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado, MtrRecebido, ReceberMtr,
-    ResiduoIbama, TratamentoResiduo, UnidadeMedida,
+    AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
+    ClasseResiduo, CriarMtr, CriarMtrComplementar, DownloadCdf, DownloadItem, EstadoFisico,
+    FiltroCdf, FiltroMtr, GerarCdf, ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado,
+    MtrRecebido, ReceberMtr, ResiduoIbama, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::config::Config;
@@ -117,6 +117,15 @@ pub(crate) trait MtrAdapter: Send + Sync {
         ctx: &MtrCtx,
         reqs: Vec<ModificarMtr>,
     ) -> Result<LoteResult<MtrModificado>, OpenMTRError>;
+
+    async fn aceitar_alteracoes(
+        &self,
+        ctx: &MtrCtx,
+        _reqs: Vec<AceitarAlteracao>,
+    ) -> Result<LoteResult<AlteracaoAceita>, OpenMTRError> {
+        let _ = ctx;
+        Err(OpenMTRError::not_supported("aceitar_alteracoes"))
+    }
 
     async fn download_mtrs(
         &self,

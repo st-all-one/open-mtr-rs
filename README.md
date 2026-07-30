@@ -34,11 +34,11 @@
 
 ```
 openMTR
-└── OpenMtrClient (facade única — 16 métodos universais)
+└── OpenMtrClient (facade única — 17 métodos universais)
     └── MtrAdapter (trait interna — 1 implementação por sistema)
         ├── SinirAdapter    → SINIR Nacional  (✅ completo)
         ├── MtrPeAdapter    → MTR Pernambuco  (✅ completo)
-        ├── SigorAdapter    → SIGOR / Ceará   (🚧 pendente)
+        ├── SigorAdapter    → SIGOR / CETESB-SP (✅ completo)
         └── ...             → +5 sistemas      (🚧 pendente)
 ```
 
@@ -218,7 +218,7 @@ match mtr.consultar_mtrs(&filtro).await {
 |---|---|---|---|---|
 | **SINIR Nacional** | ✅ Completo | `SinirAdapter` | `admin.sinir.gov.br/api` |
 | **MTR Pernambuco** | ✅ Completo | `MtrPeAdapter` | `mtr.cprh.pe.gov.br/api` |
-| SIGOR (Ceará) | 🚧 Pendente | — | — |
+| **SIGOR (CETESB/SP)** | ✅ Completo | `SigorAdapter` | `mtrr.cetesb.sp.gov.br/apiws/rest` |
 | MTR Ceará | 🚧 Pendente | — | — |
 | MTR São Paulo | 🚧 Pendente | — | — |
 | MTR Rio de Janeiro | 🚧 Pendente | — | — |
@@ -242,7 +242,7 @@ println!("{:?}", mtr.dados[0].residuos[0]);    // Residuo { codigo_ibama: "15010
 
 ---
 
-## 🎯 16 Métodos Universais
+## 🎯 17 Métodos Universais
 
 ### MTRs
 
@@ -252,7 +252,8 @@ println!("{:?}", mtr.dados[0].residuos[0]);    // Residuo { codigo_ibama: "15010
 | `criar_mtrs` | `Vec<CriarMtr>` | `Resposta<MtrCriado>` | Criar manifestos em lote |
 | `receber_mtrs` | `Vec<ReceberMtr>` | `Resposta<MtrRecebido>` | Registrar recebimento em lote |
 | `cancelar_mtrs` | `Vec<CancelarMtr>` | `Resposta<MtrCancelado>` | Cancelar em lote |
-| `modificar_mtrs` | `Vec<ModificarMtr>` | `Resposta<MtrModificado>` | Alterar recebimento / titularidade |
+| `modificar_mtrs` | `Vec<ModificarMtr>` | `Resposta<MtrModificado>` | Solicitar alteração de recebimento |
+| `aceitar_alteracoes` | `Vec<AceitarAlteracao>` | `Resposta<AlteracaoAceita>` | Aceitar ou recusar alteração solicitada |
 | `download_mtrs` | `Vec<String>` | `Resposta<DownloadItem>` | Download de PDF em lote |
 
 ### CDF (Certificado de Destinação Final)
@@ -288,7 +289,7 @@ println!("{:?}", mtr.dados[0].residuos[0]);    // Residuo { codigo_ibama: "15010
 
 ## 🧩 Adapter Pattern
 
-Cada sistema implementa o trait `MtrAdapter` com **16 métodos**. A facade `OpenMtrClient` delega para o adapter sem saber de paths, DTOs ou particularidades do sistema.
+Cada sistema implementa o trait `MtrAdapter` com **17 métodos**. A facade `OpenMtrClient` delega para o adapter sem saber de paths, DTOs ou particularidades do sistema.
 
 ```rust
 #[async_trait]
@@ -301,6 +302,7 @@ pub(crate) trait MtrAdapter: Send + Sync {
 
     async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError>;
     async fn criar_mtrs(&self, ctx: &MtrCtx, mtrs: Vec<CriarMtr>) -> Result<LoteResult<MtrCriado>, OpenMTRError>;
+    async fn aceitar_alteracoes(&self, ctx: &MtrCtx, reqs: Vec<AceitarAlteracao>) -> Result<LoteResult<AlteracaoAceita>, OpenMTRError>;
     // ... +14 métodos
 }
 ```
@@ -321,7 +323,7 @@ impl MtrAdapter for MtrPeAdapter {
         // 3. Converter resposta JSON para tipos do domínio
         // 4. Retornar LoteResult<Mtr>
     }
-    // ... +15 métodos
+    // ... +16 métodos
 }
 ```
 

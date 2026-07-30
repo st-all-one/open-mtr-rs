@@ -1,5 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
+pub mod aceitar_alteracao;
 pub mod cancelamento;
 pub mod cdf;
 pub mod criacao;
@@ -24,6 +25,7 @@ pub use newtypes::{
 };
 pub use parte::Parte;
 pub use recebimento::{MtrRecebido, ReceberMtr};
+pub use aceitar_alteracao::{AceitarAlteracao, AlteracaoAceita};
 pub use residuo::{Residuo, ResiduoCriacao, ResiduoIbama, ResiduoRecebido};
 pub use tabela::{
     Acondicionamento, ClasseResiduo, EstadoFisico, TratamentoResiduo, UnidadeMedida,
