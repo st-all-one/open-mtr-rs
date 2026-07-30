@@ -15,7 +15,7 @@ pub mod tipo;
 
 pub use cancelamento::{CancelarMtr, MtrCancelado};
 pub use cdf::{Cdf, CdfEmitido, FiltroCdf, GerarCdf};
-pub use criacao::{CriarMtr, MtrCriado};
+pub use criacao::{CriarMtr, CriarMtrComplementar, MtrCriado};
 pub use download::{DownloadCdf, DownloadItem};
 pub use modificacao::{ModificacaoTipo, ModificarMtr, MtrModificado};
 pub use mtr::{FiltroMtr, FiltroParte, Mtr, Periodo, StatusMtr};

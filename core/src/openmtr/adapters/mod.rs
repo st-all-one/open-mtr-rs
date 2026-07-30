@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, CriarMtr, DownloadCdf,
-    DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
+    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, CriarMtr, CriarMtrComplementar,
+    DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
     ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado, MtrRecebido, ReceberMtr,
     ResiduoIbama, TratamentoResiduo, UnidadeMedida,
 };
@@ -171,6 +171,41 @@ pub(crate) trait MtrAdapter: Send + Sync {
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<UnidadeMedida>, OpenMTRError>;
+
+    // ─── SIGOR-specific endpoints (with default fallbacks) ───
+
+    async fn listar_classes_por_residuo(
+        &self,
+        _ctx: &MtrCtx,
+        _codigo_ibama: &str,
+    ) -> Result<LoteResult<ClasseResiduo>, OpenMTRError> {
+        Err(OpenMTRError::not_supported("listar_classes_por_residuo"))
+    }
+
+    async fn listar_acondicionamentos_por_estado_fisico(
+        &self,
+        _ctx: &MtrCtx,
+        _codigo_estado: u32,
+    ) -> Result<LoteResult<Acondicionamento>, OpenMTRError> {
+        Err(OpenMTRError::not_supported("listar_acondicionamentos_por_estado_fisico"))
+    }
+
+    async fn consultar_mtr_por_codigo_referencia(
+        &self,
+        _ctx: &MtrCtx,
+        _unidade: u32,
+        _codigo: &str,
+    ) -> Result<Option<Mtr>, OpenMTRError> {
+        Err(OpenMTRError::not_supported("consultar_mtr_por_codigo_referencia"))
+    }
+
+    async fn criar_manifesto_complementar(
+        &self,
+        _ctx: &MtrCtx,
+        _req: CriarMtrComplementar,
+    ) -> Result<MtrCriado, OpenMTRError> {
+        Err(OpenMTRError::not_supported("criar_manifesto_complementar"))
+    }
 }
 
 pub(crate) fn validate_download(response: &RawResponse, expected: &str) -> Option<Problema> {
@@ -194,3 +229,4 @@ pub(crate) fn validate_download(response: &RawResponse, expected: &str) -> Optio
 
 pub(crate) mod sinir;
 pub(crate) mod mtr_pe;
+pub(crate) mod sigor;

@@ -203,6 +203,14 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
                     classe: item["codigoClasse"].as_i64().map(|n| n as u32),
                     acondicionamento: item["codigoAcondicionamento"].as_i64().map(|n| n as u32),
                     tratamento: item["codigoTecnologia"].as_i64().map(|n| n as u32),
+                    quantidade_recebida: None,
+                    densidade: None,
+                    numero_onu: None,
+                    classe_risco: None,
+                    nome_embarque: None,
+                    grupo_embalagem: None,
+                    codigo_interno: None,
+                    descricao_interna: None,
                 })
                 .collect()
         })

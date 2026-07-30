@@ -4,8 +4,8 @@ use tracing::{info, error, info_span};
 use uuid::Uuid;
 
 use crate::openmtr::domain::{
-    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, CriarMtr, DownloadCdf,
-    DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
+    Acondicionamento, CancelarMtr, Cdf, CdfEmitido, ClasseResiduo, CriarMtr, CriarMtrComplementar,
+    DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf, FiltroMtr, GerarCdf,
     ModificarMtr, Mtr, MtrCancelado, MtrCriado, MtrModificado, MtrRecebido, ReceberMtr,
     ResiduoIbama, TratamentoResiduo, UnidadeMedida,
 };
@@ -121,6 +121,63 @@ impl OpenMtrClient {
 
     pub async fn listar_unidades(&self) -> MtrResult<UnidadeMedida> {
         self.exec_lote("listar_unidades", self.adapter.listar_unidades(&self.ctx)).await
+    }
+
+    // ─── SIGOR-specific ───
+
+    pub async fn listar_classes_por_residuo(&self, codigo_ibama: &str) -> MtrResult<ClasseResiduo> {
+        self.exec_lote(
+            "listar_classes_por_residuo",
+            self.adapter.listar_classes_por_residuo(&self.ctx, codigo_ibama),
+        ).await
+    }
+
+    pub async fn listar_acondicionamentos_por_estado_fisico(&self, codigo_estado: u32) -> MtrResult<Acondicionamento> {
+        self.exec_lote(
+            "listar_acondicionamentos_por_estado_fisico",
+            self.adapter.listar_acondicionamentos_por_estado_fisico(&self.ctx, codigo_estado),
+        ).await
+    }
+
+    pub async fn consultar_mtr_por_codigo_referencia(
+        &self,
+        unidade: u32,
+        codigo: &str,
+    ) -> Result<Option<Mtr>, OpenMTRError> {
+        self.adapter.consultar_mtr_por_codigo_referencia(&self.ctx, unidade, codigo).await
+    }
+
+    pub async fn criar_manifesto_complementar(&self, req: CriarMtrComplementar) -> MtrResult<MtrCriado> {
+        let mut dados = Vec::new();
+        match self.adapter.criar_manifesto_complementar(&self.ctx, req).await {
+            Ok(criado) => {
+                if criado.sucesso {
+                    dados.push(criado);
+                }
+                let id = uuid::Uuid::now_v7();
+                Ok(Resposta {
+                    id,
+                    ok: true,
+                    status: 200,
+                    mensagem: "OK".into(),
+                    dados,
+                    erros: Vec::new(),
+                    total: None,
+                })
+            }
+            Err(e) => {
+                let id = uuid::Uuid::now_v7();
+                Ok(Resposta {
+                    id,
+                    ok: false,
+                    status: e.status,
+                    mensagem: e.detail.clone(),
+                    dados,
+                    erros: vec![Problema::api(e.status, e.detail)],
+                    total: None,
+                })
+            }
+        }
     }
 }
 

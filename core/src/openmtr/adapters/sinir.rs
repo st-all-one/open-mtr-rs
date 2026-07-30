@@ -95,6 +95,14 @@ fn json_para_residuo(v: &Value) -> Residuo {
         classe: v.get("claCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
         acondicionamento: v.get("tiaCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
         tratamento: v.get("traCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
+        quantidade_recebida: None,
+        densidade: None,
+        numero_onu: None,
+        classe_risco: None,
+        nome_embarque: None,
+        grupo_embalagem: None,
+        codigo_interno: None,
+        descricao_interna: None,
     }
 }
 
@@ -117,6 +125,14 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
         classe: classe.and_then(|c| c.get("claCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
         acondicionamento: acond.and_then(|a| a.get("tiaCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
         tratamento: tratamento.and_then(|t| t.get("traCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
+        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(|n| n.as_f64()),
+        densidade: v.get("marDensidade").and_then(|n| n.as_f64()),
+        numero_onu: v.get("marNumeroONU").and_then(|s| s.as_str()).map(String::from),
+        classe_risco: v.get("marClasseRisco").and_then(|s| s.as_str()).map(String::from),
+        nome_embarque: v.get("marNomeEmbarque").and_then(|s| s.as_str()).map(String::from),
+        grupo_embalagem: v.get("greCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
+        codigo_interno: v.get("codigolinterno").and_then(|s| s.as_str()).map(String::from),
+        descricao_interna: v.get("descricaolnterna").and_then(|s| s.as_str()).map(String::from),
     }
 }
 

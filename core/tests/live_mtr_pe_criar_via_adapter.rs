@@ -97,6 +97,11 @@ async fn test_pe_criar_via_adapter() {
         tratamento: 1,
         descricao_interna: Some("MADEIRA CLASSE B - TESTE VIA ADAPTER".into()),
         codigo_interno: Some("TST-ADP-001".into()),
+        densidade: None,
+        numero_onu: None,
+        classe_risco: None,
+        nome_embarque: None,
+        grupo_embalagem: None,
     }];
 
     let criar = CriarMtr {

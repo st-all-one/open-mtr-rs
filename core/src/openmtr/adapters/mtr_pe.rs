@@ -108,6 +108,14 @@ fn json_para_residuo_item(v: &Value) -> Residuo {
         classe: v.get("codigoClasse").and_then(|n| n.as_i64()).map(|n| n as u32),
         acondicionamento: v.get("codigoAcondicionamento").and_then(|n| n.as_i64()).map(|n| n as u32),
         tratamento: v.get("codigoTecnologia").and_then(|n| n.as_i64()).map(|n| n as u32),
+        quantidade_recebida: None,
+        densidade: None,
+        numero_onu: None,
+        classe_risco: None,
+        nome_embarque: None,
+        grupo_embalagem: None,
+        codigo_interno: None,
+        descricao_interna: None,
     }
 }
 

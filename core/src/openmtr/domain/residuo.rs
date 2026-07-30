@@ -18,6 +18,22 @@ pub struct Residuo {
     pub acondicionamento: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tratamento: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantidade_recebida: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub densidade: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub numero_onu: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classe_risco: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nome_embarque: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grupo_embalagem: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codigo_interno: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub descricao_interna: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +49,16 @@ pub struct ResiduoCriacao {
     pub descricao_interna: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codigo_interno: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub densidade: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub numero_onu: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classe_risco: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nome_embarque: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grupo_embalagem: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +74,14 @@ pub struct ResiduoRecebido {
     pub acondicionamento: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tratamento: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codigo_ibama_novo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tratamento_novo: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classe_nova: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub densidade: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +134,11 @@ mod tests {
             tratamento: 1,
             descricao_interna: None,
             codigo_interno: None,
+            densidade: None,
+            numero_onu: None,
+            classe_risco: None,
+            nome_embarque: None,
+            grupo_embalagem: None,
         };
         let json = serde_json::to_string(&r).unwrap();
         assert!(json.contains("\"codigo_ibama\""));

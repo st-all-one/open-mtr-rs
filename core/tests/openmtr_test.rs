@@ -21,7 +21,7 @@ async fn test_builder_missing_token() {
 #[tokio::test]
 async fn test_system_default_base_url() {
     assert!(System::Sinir.default_base_url().contains("sinir"));
-    assert!(System::Sigor.default_base_url().contains("sigor"));
+    assert!(System::Sigor.default_base_url().contains("cetesb"));
 }
 
 #[test]

@@ -40,3 +40,15 @@ pub struct MtrCriado {
     pub sucesso: bool,
     pub mensagem: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CriarMtrComplementar {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motorista: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placa_veiculo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observacoes: Option<String>,
+    pub transportador: Parte,
+    pub manifestos: Vec<String>,
+}
