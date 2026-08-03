@@ -1,4 +1,4 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
 
 use std::fmt;
 
@@ -18,6 +18,7 @@ pub enum System {
 }
 
 impl System {
+    #[must_use]
     pub fn default_base_url(&self) -> &'static str {
         match self {
             Self::Sinir => "https://admin.sinir.gov.br/api",
@@ -31,7 +32,7 @@ impl System {
         }
     }
 
-    pub(crate) fn adapter(self) -> Result<Box<dyn crate::openmtr::adapters::MtrAdapter>, OpenMTRError> {
+    pub fn adapter(self) -> Result<Box<dyn crate::openmtr::adapters::MtrAdapter>, OpenMTRError> {
         match self {
             Self::Sinir => Ok(Box::new(crate::openmtr::adapters::sinir::SinirAdapter)),
             Self::MtrPe => Ok(Box::new(crate::openmtr::adapters::mtr_pe::MtrPeAdapter)),
@@ -42,6 +43,7 @@ impl System {
         }
     }
 
+    #[must_use]
     pub fn nome(&self) -> &'static str {
         match self {
             Self::Sinir => "SINIR Nacional",

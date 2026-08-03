@@ -1,10 +1,15 @@
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Duration;
+
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 use tracing::info;
 
-pub(crate) struct TokenManager {
-    integration_token: String,
+pub struct TokenManager {
+    pub integration_token: String,
     cached: Option<CachedToken>,
-    refresh_url: Option<String>,
+    pub refresh_url: Option<String>,
 }
 
 struct CachedToken {
@@ -13,6 +18,7 @@ struct CachedToken {
 }
 
 impl TokenManager {
+    #[allow(dead_code)]
     pub fn new(integration_token: impl Into<String>) -> Self {
         Self {
             integration_token: integration_token.into(),
@@ -21,6 +27,7 @@ impl TokenManager {
         }
     }
 
+    #[must_use]
     pub fn from_cached(access_token: String, expires_at: Instant) -> Self {
         Self {
             integration_token: access_token.clone(),
@@ -33,6 +40,7 @@ impl TokenManager {
         self.refresh_url = Some(url.into());
     }
 
+    #[must_use]
     pub fn token(&self) -> Option<&str> {
         self.cached.as_ref().and_then(|cached| {
             if Instant::now() < cached.expires_at {
@@ -43,75 +51,32 @@ impl TokenManager {
         })
     }
 
-    pub fn extract_expiry(jwt: &str) -> Option<u64> {
-        let parts: Vec<&str> = jwt.split('.').collect();
-        if parts.len() < 2 {
-            return None;
-        }
-        use base64::Engine;
-        let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
-        let payload = engine.decode(parts[1]).ok()?;
-        let claims: serde_json::Value = serde_json::from_slice(&payload).ok()?;
-        claims.get("exp")?.as_u64()
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn needs_refresh(&self) -> bool {
+        self.token().is_none()
     }
 
-    pub async fn refresh(
-        &mut self,
-        http: &reqwest::Client,
-    ) -> Result<(), crate::openmtr::error::OpenMTRError> {
-        // Clone data before .await to avoid holding a borrow of self across the await point,
-        // which would cause a poisoned lock if the task is cancelled.
-        let url = self.refresh_url.clone().ok_or_else(|| {
-            crate::openmtr::error::OpenMTRError::network("Refresh URL not set")
-        })?;
-        let integration_token = self.integration_token.clone();
-
-        let resp = http
-            .post(&url)
-            .header("Authorization", format!("Bearer {integration_token}"))
-            .send()
-            .await
-            .map_err(|e| crate::openmtr::error::OpenMTRError::network(e.to_string()))?;
-
-        let status = resp.status();
-        let body: serde_json::Value = resp.json().await.map_err(|e| {
-            crate::openmtr::error::OpenMTRError::parse_error(e.to_string())
-        })?;
-
-        if !status.is_success() {
-            return Err(crate::openmtr::error::OpenMTRError::http_error(
-                status.as_u16(),
-                "Token refresh failed",
-                "",
-            ));
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn refresh_data(&self) -> Option<(String, String)> {
+        let url = self.refresh_url.clone()?;
+        if self.needs_refresh() {
+            Some((url, self.integration_token.clone()))
+        } else {
+            None
         }
+    }
 
-        let has_error = body["erro"].as_bool().unwrap_or(true);
-        if has_error {
-            return Err(crate::openmtr::error::OpenMTRError::http_error(
-                status.as_u16(),
-                "Token refresh returned error",
-                body["detail"].as_str().unwrap_or(""),
-            ));
-        }
+    #[must_use]
+    pub fn force_refresh_data(&self) -> Option<(String, String)> {
+        let url = self.refresh_url.clone()?;
+        Some((url, self.integration_token.clone()))
+    }
 
-        let objeto_resposta = body["objetoResposta"].as_str().ok_or_else(|| {
-            crate::openmtr::error::OpenMTRError::parse_error(
-                "Missing objetoResposta in refresh response",
-            )
-        })?;
-
-        let token = objeto_resposta.strip_prefix("Bearer ").ok_or_else(|| {
-            crate::openmtr::error::OpenMTRError::parse_error(
-                "objetoResposta does not start with 'Bearer '",
-            )
-        })?;
-
-        let now_secs = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let ttl = if let Some(exp_unix) = Self::extract_expiry(token) {
+    pub fn set_cached_token(&mut self, access_token: String) {
+        let now_secs = crate::openmtr::client::http::now_unix_secs();
+        let ttl = if let Some(exp_unix) = Self::extract_expiry(&access_token) {
             exp_unix.saturating_sub(now_secs)
         } else {
             8 * 60 * 60
@@ -120,15 +85,28 @@ impl TokenManager {
         let expires_at = Instant::now() + Duration::from_secs(safe);
 
         self.cached = Some(CachedToken {
-            access_token: token.to_string(),
+            access_token,
             expires_at,
         });
 
         info!("Token refreshed successfully");
-        Ok(())
+    }
+
+    #[must_use]
+    pub fn extract_expiry(jwt: &str) -> Option<u64> {
+        use base64::Engine;
+        let parts: Vec<&str> = jwt.split('.').collect();
+        if parts.len() < 2 {
+            return None;
+        }
+        let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let payload = engine.decode(parts[1]).ok()?;
+        let claims: serde_json::Value = serde_json::from_slice(&payload).ok()?;
+        claims.get("exp")?.as_u64()
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn integration_token(&self) -> &str {
         &self.integration_token
     }
@@ -177,5 +155,60 @@ mod tests {
         let mut mgr = TokenManager::new("token");
         mgr.set_refresh_url("https://example.com/refresh");
         assert!(mgr.token().is_none());
+    }
+
+    #[test]
+    fn test_force_refresh_data_with_url() {
+        let mut mgr = TokenManager::from_cached(
+            "access-token".into(),
+            std::time::Instant::now() + std::time::Duration::from_secs(3600),
+        );
+        mgr.set_refresh_url("https://example.com/token");
+        let data = mgr.force_refresh_data().unwrap();
+        assert_eq!(data.0, "https://example.com/token");
+        assert_eq!(data.1, "access-token");
+    }
+
+    #[test]
+    fn test_force_refresh_data_without_url() {
+        let mgr = TokenManager::from_cached(
+            "access-token".into(),
+            std::time::Instant::now() + std::time::Duration::from_secs(3600),
+        );
+        assert!(mgr.force_refresh_data().is_none());
+    }
+
+    #[test]
+    fn test_needs_refresh_when_valid() {
+        let mgr = TokenManager::from_cached(
+            "token".into(),
+            std::time::Instant::now() + std::time::Duration::from_secs(3600),
+        );
+        assert!(!mgr.needs_refresh());
+    }
+
+    #[test]
+    fn test_needs_refresh_when_expired() {
+        let mgr = TokenManager::from_cached(
+            "token".into(),
+            std::time::Instant::now(),
+        );
+        assert!(mgr.needs_refresh());
+    }
+
+    #[test]
+    fn test_set_cached_token() {
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let header = engine.encode(r#"{"alg":"HS256"}"#);
+        let payload = engine.encode(r#"{"exp":3000000000}"#);
+        let jwt = format!("{header}.{payload}.sig");
+
+        let mut mgr = TokenManager::new("integration");
+        assert!(mgr.token().is_none());
+
+        mgr.set_cached_token(jwt.clone());
+        assert!(mgr.token().is_some());
+        assert_eq!(mgr.token().unwrap(), jwt);
     }
 }

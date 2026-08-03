@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::return_self_not_must_use, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use async_trait::async_trait;
 use futures::future::join_all;
 use serde_json::{json, Value};
@@ -12,7 +14,6 @@ use crate::openmtr::domain::{
     ResiduoIbama, ResiduoRecebido, StatusMtr, TipoParte, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
-use crate::openmtr::resposta::Problema;
 use crate::openmtr::system::System;
 
 fn map_status_sinir(status: &str) -> StatusMtr {
@@ -28,32 +29,27 @@ fn map_status_sinir(status: &str) -> StatusMtr {
 
 fn tipo_parte_para_i32(tipo: &TipoParte) -> i32 {
     match tipo {
-        TipoParte::Gerador => 8,
         TipoParte::Transportador => 5,
         TipoParte::Destinador => 9,
         TipoParte::Armazenador => 10,
-        TipoParte::Outro(_) => 8,
+        TipoParte::Gerador | TipoParte::Outro(_) => 8,
     }
 }
 
 fn filtro_para_json(filtro: &FiltroMtr) -> Value {
-    let (data_inicial, data_final) = match &filtro.periodo {
-        Some(periodo) => (
-            periodo.inicio.to_string(),
-            periodo.fim.to_string(),
-        ),
-        None => {
-            let hoje = chrono::Utc::now().date_naive();
-            let mes_atras = hoje - chrono::Duration::days(30);
-            (mes_atras.format("%d-%m-%Y").to_string(), hoje.format("%d-%m-%Y").to_string())
-        }
+    let (data_inicial, data_final) = if let Some(periodo) = &filtro.periodo { (
+        periodo.inicio.to_string(),
+        periodo.fim.to_string(),
+    ) } else {
+        let hoje = crate::openmtr::time_util::utc_now().date_naive();
+        let mes_atras = hoje - chrono::Duration::days(30);
+        (mes_atras.format("%d-%m-%Y").to_string(), hoje.format("%d-%m-%Y").to_string())
     };
 
     let tipo_parceiro = filtro
         .parte
         .as_ref()
-        .map(|p| tipo_parte_para_i32(&p.tipo))
-        .unwrap_or(8);
+        .map_or(8, |p| tipo_parte_para_i32(&p.tipo));
 
     json!({
         "dataInicial": data_inicial,
@@ -81,7 +77,7 @@ fn json_para_parte(v: &Value) -> Parte {
         endereco: v.get("parEndereco").and_then(|s| s.as_str()).map(String::from),
         municipio: v.get("parCidade").and_then(|s| s.as_str()).map(String::from),
         uf: v.get("parUf").and_then(|s| s.as_str()).map(String::from),
-        unidade: v.get("parCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
+        unidade: v.get("parCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
     }
 }
 
@@ -89,12 +85,12 @@ fn json_para_residuo(v: &Value) -> Residuo {
     Residuo {
         codigo_ibama: v.get("resCodigoIbama").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         descricao: v.get("resDescricao").and_then(|s| s.as_str()).map(String::from),
-        quantidade: v.get("marQuantidade").and_then(|n| n.as_f64()).unwrap_or(0.0),
-        unidade: v.get("uniCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
-        estado_fisico: v.get("tieCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
-        classe: v.get("claCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
-        acondicionamento: v.get("tiaCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
-        tratamento: v.get("traCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
+        quantidade: v.get("marQuantidade").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
+        unidade: v.get("uniCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        estado_fisico: v.get("tieCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        classe: v.get("claCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        acondicionamento: v.get("tiaCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        tratamento: v.get("traCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
         quantidade_recebida: None,
         densidade: None,
         numero_onu: None,
@@ -119,18 +115,18 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
     Residuo {
         codigo_ibama: res.and_then(|r| r.get("resCodigoIbama")).and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         descricao: res.and_then(|r| r.get("resDescricao")).and_then(|s| s.as_str()).map(String::from),
-        quantidade: v.get("marQuantidade").and_then(|n| n.as_f64()).unwrap_or(0.0),
-        unidade: unidade.and_then(|u| u.get("uniCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        estado_fisico: tipo_estado.and_then(|e| e.get("tieCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        classe: classe.and_then(|c| c.get("claCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        acondicionamento: acond.and_then(|a| a.get("tiaCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        tratamento: tratamento.and_then(|t| t.get("traCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(|n| n.as_f64()),
-        densidade: v.get("marDensidade").and_then(|n| n.as_f64()),
+        quantidade: v.get("marQuantidade").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
+        unidade: unidade.and_then(|u| u.get("uniCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        estado_fisico: tipo_estado.and_then(|e| e.get("tieCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        classe: classe.and_then(|c| c.get("claCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        acondicionamento: acond.and_then(|a| a.get("tiaCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        tratamento: tratamento.and_then(|t| t.get("traCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(serde_json::Value::as_f64),
+        densidade: v.get("marDensidade").and_then(serde_json::Value::as_f64),
         numero_onu: v.get("marNumeroONU").and_then(|s| s.as_str()).map(String::from),
         classe_risco: v.get("marClasseRisco").and_then(|s| s.as_str()).map(String::from),
         nome_embarque: v.get("marNomeEmbarque").and_then(|s| s.as_str()).map(String::from),
-        grupo_embalagem: v.get("greCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
+        grupo_embalagem: v.get("greCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
         codigo_interno: v.get("codigolinterno").and_then(|s| s.as_str()).map(String::from),
         descricao_interna: v.get("descricaolnterna").and_then(|s| s.as_str()).map(String::from),
     }
@@ -139,14 +135,14 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
 fn json_para_mtr_detalhe(v: &Value) -> Mtr {
     let data_criacao = v
         .get("manData")
-        .and_then(|ts| ts.as_i64())
-        .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
+        .and_then(serde_json::Value::as_i64)
+        .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
     let data_expedicao = v
         .get("manDataExpedicao")
-        .and_then(|ts| ts.as_i64())
-        .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
+        .and_then(serde_json::Value::as_i64)
+        .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
     let status_str = v
@@ -175,28 +171,28 @@ fn json_para_mtr_detalhe(v: &Value) -> Mtr {
         observacao: v.get("manObservacao").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         motorista: v.get("manNomeMotorista").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         placa: v.get("manPlacaVeiculo").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        tipo_manifesto: v.get("tipoManifesto").and_then(|n| n.as_i64()).map(|n| n as i32),
+        tipo_manifesto: v.get("tipoManifesto").and_then(serde_json::Value::as_i64).map(|n| n as i32),
         estado_uf: v.get("estado").and_then(|e| e.get("estAbreviacao")).and_then(|s| s.as_str()).map(String::from),
         data_expedicao,
-        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(|b| b.as_bool()),
+        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(serde_json::Value::as_bool),
         hash: v.get("manHashCode").and_then(|s| s.as_str()).map(String::from),
-        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(|b| b.as_bool()),
+        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(serde_json::Value::as_bool),
         numero_estadual: v.get("manNumeroEstadual").and_then(|s| s.as_str()).map(String::from).filter(|s| !s.is_empty()),
-        codigo_estadual: v.get("manCodigoEstadual").and_then(|n| n.as_i64()),
+        codigo_estadual: v.get("manCodigoEstadual").and_then(serde_json::Value::as_i64),
     }
 }
 
 fn json_para_mtr(v: &Value) -> Mtr {
     let data_criacao = v
         .get("manData")
-        .and_then(|ts| ts.as_i64())
-        .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
+        .and_then(serde_json::Value::as_i64)
+        .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
     let data_expedicao = v
         .get("manDataExpedicao")
-        .and_then(|ts| ts.as_i64())
-        .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
+        .and_then(serde_json::Value::as_i64)
+        .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
     let status_str = v
@@ -228,14 +224,14 @@ fn json_para_mtr(v: &Value) -> Mtr {
         observacao: v.get("manObservacao").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         motorista: v.get("manNomeMotorista").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         placa: v.get("manPlacaVeiculo").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        tipo_manifesto: v.get("tipoManifesto").and_then(|n| n.as_i64()).map(|n| n as i32),
+        tipo_manifesto: v.get("tipoManifesto").and_then(serde_json::Value::as_i64).map(|n| n as i32),
         estado_uf: v.get("estado").and_then(|e| e.get("estAbreviacao")).and_then(|s| s.as_str()).map(String::from),
         data_expedicao,
-        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(|b| b.as_bool()),
+        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(serde_json::Value::as_bool),
         hash: v.get("manHashCode").and_then(|s| s.as_str()).map(String::from),
-        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(|b| b.as_bool()),
+        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(serde_json::Value::as_bool),
         numero_estadual: v.get("manNumeroEstadual").and_then(|s| s.as_str()).map(String::from).filter(|s| !s.is_empty()),
-        codigo_estadual: v.get("manCodigoEstadual").and_then(|n| n.as_i64()),
+        codigo_estadual: v.get("manCodigoEstadual").and_then(serde_json::Value::as_i64),
     }
 }
 
@@ -277,17 +273,17 @@ fn criar_mtr_para_json(criar: &CriarMtr) -> Value {
         "placaVeiculo": criar.placa_veiculo,
         "dataExpedicao": criar.data_expedicao.map(|dt| dt.and_utc().timestamp_millis()),
         "observacoes": criar.observacoes,
-        "tipoManifesto": criar.tipo_manifesto.as_ref().map(|t| t.codigo()),
+        "tipoManifesto": criar.tipo_manifesto.as_ref().map(super::super::domain::tipo::TipoManifesto::codigo),
         "simCodigo": Option::<i32>::None,
         "listaManifestoResiduos": criar.residuos.iter().map(residuo_criacao_para_json).collect::<Vec<_>>(),
     })
 }
 
 fn json_para_mtr_criado(v: &Value) -> MtrCriado {
-    let valido = v.get("restResponseValido").and_then(|b| b.as_bool()).unwrap_or(false);
+    let valido = v.get("restResponseValido").and_then(serde_json::Value::as_bool).unwrap_or(false);
     MtrCriado {
         numero: v.get("manifestoNumeroNacional").and_then(|s| s.as_str()).map(String::from),
-        codigo_gerado: v.get("codigoGerado").and_then(|n| n.as_i64()),
+        codigo_gerado: v.get("codigoGerado").and_then(serde_json::Value::as_i64),
         sucesso: valido,
         mensagem: v.get("restResponseMensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
@@ -325,21 +321,21 @@ fn receber_mtr_para_json(receber: &ReceberMtr) -> Value {
 fn json_para_mtr_recebido(v: &Value) -> MtrRecebido {
     MtrRecebido {
         numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        recebido: v.get("recebido").and_then(|b| b.as_bool()).unwrap_or(false),
+        recebido: v.get("recebido").and_then(serde_json::Value::as_bool).unwrap_or(false),
         mensagem: v.get("mensagem").and_then(|s| s.as_str()).map(String::from),
     }
 }
 
 fn json_para_acondicionamento(v: &Value) -> Acondicionamento {
     Acondicionamento {
-        codigo: v.get("tiaCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("tiaCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("tiaDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
 }
 
 fn json_para_unidade(v: &Value) -> UnidadeMedida {
     UnidadeMedida {
-        codigo: v.get("uniCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("uniCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("uniDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         sigla: v.get("uniSigla").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
@@ -347,14 +343,14 @@ fn json_para_unidade(v: &Value) -> UnidadeMedida {
 
 fn json_para_estado_fisico(v: &Value) -> EstadoFisico {
     EstadoFisico {
-        codigo: v.get("tieCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("tieCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("tieDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
 }
 
 fn json_para_classe(v: &Value) -> ClasseResiduo {
     ClasseResiduo {
-        codigo: v.get("claCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("claCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("claDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         resolucao: v.get("claResolucao").and_then(|s| s.as_str()).map(String::from),
     }
@@ -362,7 +358,7 @@ fn json_para_classe(v: &Value) -> ClasseResiduo {
 
 fn json_para_tratamento(v: &Value) -> TratamentoResiduo {
     TratamentoResiduo {
-        codigo: v.get("traCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("traCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("traDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
 }
@@ -378,10 +374,10 @@ fn json_para_cdf_emitido(v: &Value) -> CdfEmitido {
     let data_emissao = v.get("dataEmissao")
         .and_then(|s| s.as_str())
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok())
-        .unwrap_or_else(|| chrono::Utc::now().date_naive());
+        .unwrap_or_else(|| crate::openmtr::time_util::utc_now().date_naive());
 
     CdfEmitido {
-        codigo: v.get("cdfCodigo").and_then(|n| n.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
+        codigo: v.get("cdfCodigo").and_then(serde_json::Value::as_i64).map(|n| n.to_string()).unwrap_or_default(),
         numero: v.get("cdfNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         data_emissao,
         status: v.get("status").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
@@ -393,7 +389,7 @@ fn extrair_objeto_resposta(v: &Value) -> Option<&Value> {
 }
 
 fn tem_erro(v: &Value) -> bool {
-    v.get("erro").and_then(|b| b.as_bool()).unwrap_or(false)
+    v.get("erro").and_then(serde_json::Value::as_bool).unwrap_or(false)
 }
 
 pub(crate) struct SinirAdapter;
@@ -413,7 +409,7 @@ impl MtrAdapter for SinirAdapter {
         let _guard = span.enter();
         let refresh_url = format!("{}/token", ctx.config.base_url);
         drop(_guard);
-        ctx.http.set_refresh_url(&refresh_url).await;
+        ctx.http.set_refresh_url(&refresh_url);
         let token = ctx.http.get_token().await?;
         info!("Token SINIR renovado com sucesso");
         Ok(token)
@@ -439,11 +435,10 @@ impl MtrAdapter for SinirAdapter {
         let _span = info_span!("sinir.consultar_mtrs");
 
         // Se há números específicos, usa o endpoint de detalhe
-        if let Some(ref nums) = filtro.numeros {
-            if !nums.is_empty() {
+        if let Some(ref nums) = filtro.numeros
+            && !nums.is_empty() {
                 return self.consultar_mtrs_por_numeros(ctx, nums).await;
             }
-        }
 
         // Caso contrário, busca por período + tipo de parceiro
         let body = filtro_para_json(filtro);
@@ -457,7 +452,7 @@ impl MtrAdapter for SinirAdapter {
             return Ok(LoteResult::from_vec(Vec::new()));
         }
 
-        let total_reg = response.get("totalRecords").and_then(|n| n.as_i64());
+        let total_reg = response.get("totalRecords").and_then(serde_json::Value::as_i64);
 
         let items = response.get("objetoResposta").and_then(|a| a.as_array()).cloned().unwrap_or_default();
 
@@ -499,7 +494,7 @@ impl MtrAdapter for SinirAdapter {
                 .await
             {
                 Ok(resp) => {
-                    let erro_nacional = resp.get("erroNacional").and_then(|b| b.as_bool()).unwrap_or(false);
+                    let erro_nacional = resp.get("erroNacional").and_then(serde_json::Value::as_bool).unwrap_or(false);
                     if erro_nacional {
                         let msg = resp
                             .get("mensagemErroNacional")
@@ -507,7 +502,7 @@ impl MtrAdapter for SinirAdapter {
                             .unwrap_or("Erro nacional na criação");
                         itens.push(ItemResult::Erro {
                             indice,
-                            problema: Problema::validation(msg),
+                            problema: OpenMTRError::validation(msg),
                         });
                         continue;
                     }
@@ -520,7 +515,7 @@ impl MtrAdapter for SinirAdapter {
                     if some_respostas.is_empty() {
                         itens.push(ItemResult::Erro {
                             indice,
-                            problema: Problema::validation(
+                            problema: OpenMTRError::validation(
                                 "Nenhuma resposta retornada pela API",
                             ),
                         });
@@ -534,7 +529,7 @@ impl MtrAdapter for SinirAdapter {
                         } else {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::validation(criado.mensagem),
+                                problema: OpenMTRError::validation(criado.mensagem),
                             });
                         }
                     }
@@ -543,7 +538,7 @@ impl MtrAdapter for SinirAdapter {
                     warn!(erro = %e, "Falha ao criar MTR");
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     });
                 }
             }
@@ -578,7 +573,7 @@ impl MtrAdapter for SinirAdapter {
                     if some_items.is_empty() {
                         itens.push(ItemResult::Erro {
                             indice,
-                            problema: Problema::validation("Nenhum retorno no recebimento"),
+                            problema: OpenMTRError::validation("Nenhum retorno no recebimento"),
                         });
                         continue;
                     }
@@ -590,7 +585,7 @@ impl MtrAdapter for SinirAdapter {
                         } else {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::validation(
+                                problema: OpenMTRError::validation(
                                     recebido.mensagem.unwrap_or_default(),
                                 ),
                             });
@@ -601,7 +596,7 @@ impl MtrAdapter for SinirAdapter {
                     warn!(erro = %e, "Falha ao receber MTR");
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     });
                 }
             }
@@ -634,7 +629,7 @@ impl MtrAdapter for SinirAdapter {
                             .unwrap_or("Erro no cancelamento");
                         itens.push(ItemResult::Erro {
                             indice,
-                            problema: Problema::validation(msg),
+                            problema: OpenMTRError::validation(msg),
                         });
                         continue;
                     }
@@ -665,7 +660,7 @@ impl MtrAdapter for SinirAdapter {
                                     .unwrap_or("unknown");
                                 itens.push(ItemResult::Erro {
                                     indice,
-                                    problema: Problema::api(
+                                    problema: OpenMTRError::api_error(
                                         400,
                                         format!("Status inesperado: {stat}"),
                                     ),
@@ -675,7 +670,7 @@ impl MtrAdapter for SinirAdapter {
                         None => {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::validation("Resposta vazia no cancelamento"),
+                                problema: OpenMTRError::validation("Resposta vazia no cancelamento"),
                             });
                         }
                     }
@@ -684,7 +679,7 @@ impl MtrAdapter for SinirAdapter {
                     warn!(erro = %e, "Falha ao cancelar MTR");
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     });
                 }
             }
@@ -737,7 +732,7 @@ impl MtrAdapter for SinirAdapter {
                             warn!(erro = %e, "Falha ao modificar MTR");
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::api(502, e.to_string()),
+                                problema: OpenMTRError::api_error(502, e.to_string()),
                             });
                         }
                     }
@@ -745,7 +740,7 @@ impl MtrAdapter for SinirAdapter {
                 _ => {
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::validation(format!(
+                        problema: OpenMTRError::validation(format!(
                             "Tipo de modificação não suportado no SINIR: {:?}",
                             req.tipo
                         )),
@@ -776,10 +771,10 @@ impl MtrAdapter for SinirAdapter {
                 Ok(resp) => {
                     if tem_erro(&resp) {
                         let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or("Erro no aceite");
-                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
+                        itens.push(ItemResult::Erro { indice, problema: OpenMTRError::validation(msg) });
                         continue;
                     }
-                    let aceita = resp.get("alteracaoAceita").and_then(|b| b.as_bool()).unwrap_or(false);
+                    let aceita = resp.get("alteracaoAceita").and_then(serde_json::Value::as_bool).unwrap_or(false);
                     let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string();
                     itens.push(ItemResult::Ok(AlteracaoAceita {
                         numero: req.numero,
@@ -789,7 +784,7 @@ impl MtrAdapter for SinirAdapter {
                 }
                 Err(e) => {
                     warn!(erro = %e, "Falha ao aceitar alteração no SINIR");
-                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                    itens.push(ItemResult::Erro { indice, problema: OpenMTRError::api_error(502, e.to_string()) });
                 }
             }
         }
@@ -826,7 +821,7 @@ impl MtrAdapter for SinirAdapter {
                         warn!(numero = %numero, erro = %e, "Falha ao baixar MTR");
                         ItemResult::Erro {
                             indice,
-                            problema: Problema::api(502, e.to_string()),
+                            problema: OpenMTRError::api_error(502, e.to_string()),
                         }
                     }
                 }
@@ -852,8 +847,7 @@ impl MtrAdapter for SinirAdapter {
             let body = json!({
                 "listaManifestos": req.manifestos,
                 "dataEmissao": req.data_emissao.and_hms_opt(0, 0, 0)
-                    .map(|dt| dt.and_utc().timestamp_millis())
-                    .unwrap_or(0),
+                    .map_or(0, |dt| dt.and_utc().timestamp_millis()),
                 "nomeResponsavel": req.responsavel,
                 "observacoes": req.observacoes,
             });
@@ -870,7 +864,7 @@ impl MtrAdapter for SinirAdapter {
                     None => {
                         itens.push(ItemResult::Erro {
                             indice,
-                            problema: Problema::validation("Resposta vazia na emissão de CDF"),
+                            problema: OpenMTRError::validation("Resposta vazia na emissão de CDF"),
                         });
                     }
                 },
@@ -878,7 +872,7 @@ impl MtrAdapter for SinirAdapter {
                     warn!(erro = %e, "Falha ao emitir CDF");
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     });
                 }
             }
@@ -933,7 +927,7 @@ impl MtrAdapter for SinirAdapter {
                         warn!(codigo = %req.codigo, erro = %e, "Falha ao baixar CDF");
                         ItemResult::Erro {
                             indice,
-                            problema: Problema::api(502, e.to_string()),
+                            problema: OpenMTRError::api_error(502, e.to_string()),
                         }
                     }
                 }
@@ -1080,7 +1074,7 @@ impl SinirAdapter {
                             .unwrap_or("Erro ao consultar MTR");
                         itens.push(ItemResult::Erro {
                             indice,
-                            problema: Problema::not_found(msg),
+                            problema: OpenMTRError::not_found(msg),
                         });
                         continue;
                     }
@@ -1092,7 +1086,7 @@ impl SinirAdapter {
                         None => {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::not_found("Resposta vazia do SINIR"),
+                                problema: OpenMTRError::not_found("Resposta vazia do SINIR"),
                             });
                         }
                     }
@@ -1101,7 +1095,7 @@ impl SinirAdapter {
                     warn!(numero = %numero, erro = %e, "Falha ao consultar MTR detalhe");
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     });
                 }
             }

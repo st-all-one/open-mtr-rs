@@ -1,0 +1,33 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_openmtrwasm_free: (a: number, b: number) => void;
+export const openmtrwasm_aceitar_alteracoes: (a: number, b: number, c: number) => number;
+export const openmtrwasm_cancelar_mtrs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_consultar_cdfs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_consultar_mtrs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_criar_manifesto_complementar: (a: number, b: number, c: number) => number;
+export const openmtrwasm_criar_mtrs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_download_cdfs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_download_mtrs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_gerar_cdfs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_health: (a: number) => number;
+export const openmtrwasm_init: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
+export const openmtrwasm_listar_acondicionamentos: (a: number) => number;
+export const openmtrwasm_listar_acondicionamentos_por_estado_fisico: (a: number, b: number) => number;
+export const openmtrwasm_listar_classes: (a: number) => number;
+export const openmtrwasm_listar_classes_por_residuo: (a: number, b: number, c: number) => number;
+export const openmtrwasm_listar_estados_fisicos: (a: number) => number;
+export const openmtrwasm_listar_residuos: (a: number) => number;
+export const openmtrwasm_listar_tratamentos: (a: number) => number;
+export const openmtrwasm_listar_unidades: (a: number) => number;
+export const openmtrwasm_modificar_mtrs: (a: number, b: number, c: number) => number;
+export const openmtrwasm_new: () => number;
+export const openmtrwasm_receber_mtrs: (a: number, b: number, c: number) => number;
+export const __wasm_bindgen_func_elem_608: (a: number, b: number, c: number, d: number) => void;
+export const __wasm_bindgen_func_elem_905: (a: number, b: number, c: number, d: number) => void;
+export const __wbindgen_export: (a: number, b: number) => number;
+export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_export3: (a: number) => void;
+export const __wbindgen_export4: (a: number, b: number) => void;
+export const __wbindgen_add_to_stack_pointer: (a: number) => number;

@@ -9,13 +9,13 @@ use crate::openmtr::domain::{
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::config::Config;
 use crate::openmtr::client::http::{MtrHttpClient, RawResponse};
-use crate::openmtr::resposta::Problema;
 use crate::openmtr::system::System;
+use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub enum ItemResult<T> {
     Ok(T),
-    Erro { indice: usize, problema: Problema },
+    Erro { indice: usize, problema: OpenMTRError },
 }
 
 #[derive(Debug, Clone)]
@@ -26,14 +26,17 @@ pub struct LoteResult<T> {
 }
 
 impl<T> LoteResult<T> {
+    #[must_use]
     pub fn new(itens: Vec<ItemResult<T>>) -> Self {
         Self { itens, total: None }
     }
 
+    #[must_use]
     pub fn com_total(itens: Vec<ItemResult<T>>, total: i64) -> Self {
         Self { itens, total: Some(total) }
     }
 
+    #[must_use]
     pub fn sucessos(&self) -> Vec<&T> {
         self.itens.iter().filter_map(|i| match i {
             ItemResult::Ok(val) => Some(val),
@@ -41,17 +44,20 @@ impl<T> LoteResult<T> {
         }).collect()
     }
 
-    pub fn erros(&self) -> Vec<&Problema> {
+    #[must_use]
+    pub fn erros(&self) -> Vec<&OpenMTRError> {
         self.itens.iter().filter_map(|i| match i {
             ItemResult::Ok(_) => None,
             ItemResult::Erro { problema, .. } => Some(problema),
         }).collect()
     }
 
+    #[must_use]
     pub fn total_ok(&self) -> usize {
         self.sucessos().len()
     }
 
+    #[must_use]
     pub fn total_erros(&self) -> usize {
         self.erros().len()
     }
@@ -67,13 +73,15 @@ impl<T> LoteResult<T> {
     }
 }
 
-pub(crate) struct MtrCtx {
-    pub http: MtrHttpClient,
+pub type HttpClient = MtrHttpClient;
+
+pub struct MtrCtx {
+    pub http: HttpClient,
     pub config: Config,
 }
 
 #[async_trait]
-pub(crate) trait MtrAdapter: Send + Sync {
+pub trait MtrAdapter: Send + Sync {
     #[allow(dead_code)]
     fn system(&self) -> System;
     fn nome(&self) -> &'static str;
@@ -217,23 +225,38 @@ pub(crate) trait MtrAdapter: Send + Sync {
     }
 }
 
-pub(crate) fn validate_download(response: &RawResponse, expected: &str) -> Option<Problema> {
+pub(crate) fn validate_download(response: &RawResponse, expected: &str) -> Option<OpenMTRError> {
     if response.bytes.is_empty() {
-        return Some(Problema::validation("Download retornou arquivo vazio"));
+        return Some(OpenMTRError::validation("Download retornou arquivo vazio"));
     }
 
     if response.bytes.len() < 100 {
-        return Some(Problema::validation(format!(
+        return Some(OpenMTRError::validation(format!(
             "Arquivo muito pequeno ({} bytes) para ser um {expected} válido",
             response.bytes.len()
         )));
     }
 
     if let Err(msg) = response.validate(expected) {
-        return Some(Problema::validation(msg));
+        return Some(OpenMTRError::validation(msg));
     }
 
     None
+}
+
+#[allow(dead_code)]
+pub(crate) async fn get_value(ctx: &MtrCtx, path: &str, label: &str) -> Result<Value, OpenMTRError> {
+    ctx.http.get::<Value>(path, label).await
+}
+
+#[allow(dead_code)]
+pub(crate) async fn post_value(
+    ctx: &MtrCtx,
+    path: &str,
+    body: &impl serde::Serialize,
+    label: &str,
+) -> Result<Value, OpenMTRError> {
+    ctx.http.post::<Value, _>(path, body, label).await
 }
 
 pub(crate) mod sinir;

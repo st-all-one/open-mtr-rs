@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc, clippy::return_self_not_must_use)]
+
 use std::time::Duration;
 use tracing::info;
 
@@ -6,7 +8,7 @@ use crate::openmtr::system::System;
 
 /// Utilitário de autenticação para sistemas legado (CPF + senha).
 ///
-/// Sistemas modernos (SINIR, etc.) usam integration_token direto no
+/// Sistemas modernos (SINIR, etc.) usam `integration_token` direto no
 /// [`OpenMtrClient`](crate::openmtr::open_mtr_client::OpenMtrClient).
 ///
 /// `OpenMtrAuth` existe apenas para sistemas que ainda exigem
@@ -23,6 +25,7 @@ pub struct OpenMtrAuthBuilder {
 }
 
 impl OpenMtrAuthBuilder {
+    #[must_use]
     pub fn base(mut self, system: System) -> Self {
         self.system = Some(system);
         self
@@ -45,6 +48,7 @@ impl OpenMtrAuthBuilder {
         self
     }
 
+    #[must_use]
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout = Some(Duration::from_secs(secs));
         self
@@ -53,6 +57,7 @@ impl OpenMtrAuthBuilder {
     /// Executa a autenticação e retorna o token JWT.
     ///
     /// Para sistemas modernos (SINIR, etc.), retorna erro "não suportado".
+    #[cfg(feature = "native-http")]
     pub async fn build(self) -> Result<String, OpenMTRError> {
         let system = self.system.ok_or_else(|| {
             OpenMTRError::config("system é obrigatório — use .base(System::...)")
@@ -62,12 +67,9 @@ impl OpenMtrAuthBuilder {
             .base_url
             .unwrap_or_else(|| system.default_base_url().to_string());
 
-        let (cpf, senha, unidade) = match (self.cpf, self.senha, self.unidade) {
-            (Some(c), Some(s), Some(u)) => (c, s, u),
-            _ => return Err(OpenMTRError::config(
+        let (Some(cpf), Some(senha), Some(unidade)) = (self.cpf, self.senha, self.unidade) else { return Err(OpenMTRError::config(
                 "credenciais (CPF, senha, unidade) são obrigatórias",
-            )),
-        };
+            )) };
 
         info!(
             system = %system.nome(),
@@ -78,14 +80,17 @@ impl OpenMtrAuthBuilder {
         let mut config_builder = crate::openmtr::config::Config::builder()
             .system(system)
             .base_url(base_url)
-            .timeout_secs(self.timeout.map(|d| d.as_secs()).unwrap_or(60))
+            .timeout_secs(self.timeout.map_or(60, |d| d.as_secs()))
             .max_rps(10);
         if let Some(ref cnpj) = self.cnpj {
             config_builder = config_builder.cnpj(cnpj);
         }
         let config = config_builder.build()?;
 
-        let http = crate::openmtr::client::http::MtrHttpClient::new(config.clone())?;
+        let transport = crate::openmtr::transport::reqwest::ReqwestTransport::new(
+            config.timeout,
+        )?;
+        let http = crate::openmtr::client::http::MtrHttpClient::new(config.clone(), transport)?;
 
         let ctx = crate::openmtr::adapters::MtrCtx {
             http,

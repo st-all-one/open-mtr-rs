@@ -13,6 +13,9 @@ core:
 napi:
 	cd napi && npm ci && npm run build
 
+deno_napi:
+	cargo build -p open-mtr-deno-napi --release
+
 uniffi:
 	cargo build -p open-mtr-uniffi --release
 

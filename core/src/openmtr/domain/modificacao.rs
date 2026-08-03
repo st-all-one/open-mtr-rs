@@ -6,6 +6,7 @@ use super::parte::Parte;
 use super::residuo::ResiduoRecebido;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ModificacaoTipo {
     Recebimento,
     Titularidade,

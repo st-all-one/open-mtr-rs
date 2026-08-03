@@ -91,6 +91,7 @@ pub struct ResiduoIbama {
 }
 
 impl ResiduoIbama {
+    #[must_use]
     pub fn is_perigoso(&self) -> bool {
         let code = self.codigo_ibama.trim().to_uppercase();
         code.starts_with('F')

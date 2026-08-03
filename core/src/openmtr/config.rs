@@ -1,4 +1,4 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc, clippy::return_self_not_must_use)]
 
 use std::time::Duration;
 
@@ -8,7 +8,7 @@ use crate::openmtr::system::System;
 use super::error::OpenMTRError;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Config {
+pub struct Config {
     pub system: System,
     pub base_url: String,
     pub integration_token: Option<String>,
@@ -19,6 +19,7 @@ pub(crate) struct Config {
 }
 
 impl Config {
+    #[must_use]
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder {
             system: System::Sinir,
@@ -32,7 +33,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ConfigBuilder {
+pub struct ConfigBuilder {
     system: System,
     base_url: Option<String>,
     integration_token: Option<String>,
@@ -42,6 +43,7 @@ pub(crate) struct ConfigBuilder {
 }
 
 impl ConfigBuilder {
+    #[must_use]
     pub fn system(mut self, s: System) -> Self {
         self.system = s;
         self
@@ -57,11 +59,13 @@ impl ConfigBuilder {
         self
     }
 
+    #[must_use]
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout = Duration::from_secs(secs);
         self
     }
 
+    #[must_use]
     pub fn max_rps(mut self, rps: u32) -> Self {
         self.max_rps = rps;
         self

@@ -1,9 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
+use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 #[error("[{status}] {title} — {detail} (type: {type}, instance: {instance})")]
 pub struct OpenMTRError {
     pub r#type: Url,
@@ -72,6 +73,7 @@ impl OpenMTRError {
         }
     }
 
+    #[must_use]
     pub fn not_supported(operation: &str) -> Self {
         Self {
             r#type: error_types::not_supported(),
@@ -86,6 +88,32 @@ impl OpenMTRError {
         Self::validation(detail)
     }
 
+    pub fn not_found(detail: impl Into<String>) -> Self {
+        Self {
+            r#type: error_types::not_found(),
+            title: "Não encontrado".into(),
+            status: 404,
+            detail: detail.into(),
+            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
+        }
+    }
+
+    pub fn api_error(status: u16, detail: impl Into<String>) -> Self {
+        Self {
+            r#type: error_types::api(),
+            title: "Erro de API".into(),
+            status,
+            detail: detail.into(),
+            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
+        }
+    }
+
+    #[must_use]
+    pub fn is_timeout(&self) -> bool {
+        self.status == 504 || self.detail.to_lowercase().contains("timeout")
+    }
+
+    #[must_use]
     pub fn http_error(status: u16, title: &str, detail: &str) -> Self {
         Self {
             r#type: error_types::api(),
@@ -97,12 +125,11 @@ impl OpenMTRError {
     }
 }
 
+#[cfg(feature = "native-http")]
 impl From<reqwest::Error> for OpenMTRError {
     fn from(err: reqwest::Error) -> Self {
         if err.is_timeout() {
             Self::timeout(err.to_string())
-        } else if err.is_connect() {
-            Self::network(err.to_string())
         } else {
             Self::network(err.to_string())
         }
@@ -123,14 +150,23 @@ pub mod error_types {
             .expect("urn:openmtr:error:{suffix} is a valid Url")
     }
 
+    #[must_use]
     pub fn network() -> Url { make_urn("network") }
+    #[must_use]
     pub fn timeout() -> Url { make_urn("timeout") }
+    #[must_use]
     pub fn auth() -> Url { make_urn("authentication") }
+    #[must_use]
     pub fn validation() -> Url { make_urn("validation") }
+    #[must_use]
     pub fn config() -> Url { make_urn("configuration") }
+    #[must_use]
     pub fn not_found() -> Url { make_urn("not-found") }
+    #[must_use]
     pub fn api() -> Url { make_urn("api-error") }
+    #[must_use]
     pub fn not_supported() -> Url { make_urn("not-supported") }
+    #[must_use]
     pub fn internal() -> Url { make_urn("internal") }
 }
 
@@ -204,6 +240,7 @@ mod tests {
         assert!(s.contains("y"));
     }
 
+    #[cfg(feature = "native-http")]
     #[tokio::test]
     async fn test_from_reqwest_error() {
         let body = reqwest::Client::new()

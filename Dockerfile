@@ -17,14 +17,16 @@ COPY Cargo.toml Cargo.lock ./
 COPY core/Cargo.toml core/
 COPY napi/Cargo.toml napi/
 COPY uniffi/Cargo.toml uniffi/
+COPY deno_napi/Cargo.toml deno_napi/
 
 RUN mkdir -p core/src/client core/src/core core/src/schemas \
-             core/src/services core/src/cache napi/src uniffi/src && \
+             core/src/services core/src/cache napi/src uniffi/src deno_napi/src && \
     printf "pub mod client;\npub mod core;\npub mod schemas;\npub mod services;\npub mod cache;" \
          > core/src/lib.rs && \
     touch core/src/client/mod.rs core/src/core/mod.rs \
           core/src/schemas/mod.rs core/src/services/mod.rs \
-          core/src/cache/mod.rs napi/src/lib.rs uniffi/src/lib.rs
+          core/src/cache/mod.rs napi/src/lib.rs uniffi/src/lib.rs \
+          deno_napi/src/lib.rs
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry cargo fetch
 
@@ -35,6 +37,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo test -p open-mtr-core 2>&1 | tail -1
 
 RUN cd napi && npm install 2>/dev/null; npm run build 2>/dev/null; echo "napi built"
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build -p open-mtr-deno-napi --release && \
+    cp target/release/libopen_mtr_deno_napi.so /tmp/
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build -p open-mtr-uniffi && \
@@ -57,6 +63,7 @@ COPY --from=builder /usr/local/cargo /usr/local/cargo
 COPY --from=builder /build /app
 COPY --from=builder /tmp/bindings /tmp/bindings
 COPY --from=builder /tmp/libuniffi_open_mtr.so /tmp/
+COPY --from=builder /tmp/libopen_mtr_deno_napi.so /tmp/
 
 ENV CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
 WORKDIR /app
@@ -125,11 +132,22 @@ except Exception as e:
 " 2>&1) && pass "python import works" || fail "python import failed"
 fi
 
-step "5. Design consistency"
-echo "All 3 bindings delegate to the same core crate (open-mtr-core):"
+step "5. deno_napi (shared library)"
+DSO="/tmp/libopen_mtr_deno_napi.so"
+if [ -f "$DSO" ]; then
+    SZ=$(stat -c%s "$DSO" 2>/dev/null || stat -f%z "$DSO" 2>/dev/null)
+    SYMS=$(nm -D "$DSO" | grep -c ' T ')
+    pass "deno_napi lib exists (${SZ}B, ${SYMS} exports)"
+else
+    fail "deno_napi lib not found"
+fi
+
+step "6. Design consistency"
+echo "All 4 bindings delegate to the same core crate (open-mtr-core):"
 echo "  Rust:    core/src/openmtr/adapters/sinir.rs → MtrAdapter trait"
-echo "  napi:    napi/src/lib.rs → MtrSinirClient"
-echo "  UniFFI:  uniffi/src/lib.rs → MtrSinirClient"
+echo "  napi:    napi/src/lib.rs → OpenMtrClient"
+echo "  UniFFI:  uniffi/src/lib.rs → OpenMtrClient"
+echo "  deno:    deno_napi/src/lib.rs → OpenMtrClient"
 echo "All use the same domain types from crate::openmtr::domain"
 pass "consistent design across languages"
 

@@ -1,7 +1,7 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
 
 use crate::openmtr::error::OpenMTRError;
-use chrono::{NaiveDate, NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -13,10 +13,10 @@ impl Cnpj {
         if digits.len() != 14 || !digits.chars().all(|c| c.is_ascii_digit()) {
             return false;
         }
-        if digits.chars().all(|c| c == digits.chars().next().unwrap()) {
+        if digits.chars().all(|c| c == digits.chars().next().expect("non-empty string")) {
             return false;
         }
-        let nums: Vec<u32> = digits.chars().map(|c| c.to_digit(10).unwrap()).collect();
+        let nums: Vec<u32> = digits.chars().map(|c| c.to_digit(10).expect("ascii digit")).collect();
 
         let pesos1: [u32; 12] = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
         let soma1: u32 = nums[..12]
@@ -40,7 +40,7 @@ impl Cnpj {
     }
 
     pub fn new(digits: &str) -> Result<Self, OpenMTRError> {
-        let clean: String = digits.chars().filter(|c| c.is_ascii_digit()).collect();
+        let clean: String = digits.chars().filter(char::is_ascii_digit).collect();
         if Self::validar_digitos(&clean) {
             Ok(Self(clean))
         } else {
@@ -48,10 +48,12 @@ impl Cnpj {
         }
     }
 
+    #[must_use]
     pub fn parse_unchecked(s: &str) -> Self {
-        Self(s.chars().filter(|c| c.is_ascii_digit()).collect())
+        Self(s.chars().filter(char::is_ascii_digit).collect())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -92,10 +94,10 @@ impl Cpf {
         if digits.len() != 11 || !digits.chars().all(|c| c.is_ascii_digit()) {
             return false;
         }
-        if digits.chars().all(|c| c == digits.chars().next().unwrap()) {
+        if digits.chars().all(|c| c == digits.chars().next().expect("non-empty string")) {
             return false;
         }
-        let nums: Vec<u32> = digits.chars().map(|c| c.to_digit(10).unwrap()).collect();
+        let nums: Vec<u32> = digits.chars().map(|c| c.to_digit(10).expect("ascii digit")).collect();
 
         let soma1: u32 = nums[..9]
             .iter()
@@ -117,7 +119,7 @@ impl Cpf {
     }
 
     pub fn new(digits: &str) -> Result<Self, OpenMTRError> {
-        let clean: String = digits.chars().filter(|c| c.is_ascii_digit()).collect();
+        let clean: String = digits.chars().filter(char::is_ascii_digit).collect();
         if Self::validar_digitos(&clean) {
             Ok(Self(clean))
         } else {
@@ -125,10 +127,12 @@ impl Cpf {
         }
     }
 
+    #[must_use]
     pub fn parse_unchecked(s: &str) -> Self {
-        Self(s.chars().filter(|c| c.is_ascii_digit()).collect())
+        Self(s.chars().filter(char::is_ascii_digit).collect())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -168,7 +172,7 @@ pub enum CpfCnpj {
 
 impl CpfCnpj {
     pub fn new(s: &str) -> Result<Self, OpenMTRError> {
-        let clean: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+        let clean: String = s.chars().filter(char::is_ascii_digit).collect();
         match clean.len() {
             11 => Ok(Self::Cpf(Cpf::new(&clean)?)),
             14 => Ok(Self::Cnpj(Cnpj::new(&clean)?)),
@@ -179,6 +183,7 @@ impl CpfCnpj {
         }
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Cpf(c) => c.as_str(),
@@ -216,6 +221,7 @@ impl<'de> Deserialize<'de> for CpfCnpj {
 pub struct DataMtr(pub NaiveDate);
 
 impl DataMtr {
+    #[must_use]
     pub fn new(d: NaiveDate) -> Self {
         Self(d)
     }
@@ -250,10 +256,12 @@ impl<'de> Deserialize<'de> for DataMtr {
 pub struct TimestampMs(pub i64);
 
 impl TimestampMs {
+    #[must_use]
     pub fn now() -> Self {
-        Self(Utc::now().timestamp_millis())
+        Self(crate::openmtr::time_util::utc_now().timestamp_millis())
     }
 
+    #[must_use]
     pub fn from_datetime(dt: NaiveDateTime) -> Self {
         Self(dt.and_utc().timestamp_millis())
     }
@@ -289,10 +297,12 @@ impl Quantidade {
         Ok(Self(valor))
     }
 
-    pub fn new_unchecked(valor: f64) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn new_unchecked(valor: f64) -> Self {
         Self(valor)
     }
 
+    #[must_use]
     pub fn get(&self) -> f64 { self.0 }
 }
 
@@ -307,7 +317,7 @@ pub struct CodigoIbama(String);
 
 impl CodigoIbama {
     pub fn new(digits: &str) -> Result<Self, crate::openmtr::error::OpenMTRError> {
-        let cleaned: String = digits.chars().filter(|c| c.is_ascii_digit()).collect();
+        let cleaned: String = digits.chars().filter(char::is_ascii_digit).collect();
         if cleaned.len() != 6 && cleaned.len() != 8 {
             return Err(crate::openmtr::error::OpenMTRError::validation(
                 format!("Código IBAMA deve ter 6 ou 8 dígitos: {digits}"),
@@ -316,10 +326,12 @@ impl CodigoIbama {
         Ok(Self(cleaned))
     }
 
+    #[must_use]
     pub fn parse_unchecked(s: &str) -> Self {
         Self(s.to_string())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str { &self.0 }
 }
 
@@ -338,8 +350,8 @@ impl PlacaVeiculo {
         // Aceita formato ABC1D23 (mercosul) ou ABC-1234 (antigo)
         let is_mercosul = upper.len() == 7
             && upper.chars().take(3).all(|c| c.is_ascii_alphabetic())
-            && upper.chars().nth(3).map_or(false, |c| c.is_ascii_digit())
-            && upper.chars().nth(4).map_or(false, |c| c.is_ascii_alphabetic())
+            && upper.chars().nth(3).is_some_and(|c| c.is_ascii_digit())
+            && upper.chars().nth(4).is_some_and(|c| c.is_ascii_alphabetic())
             && upper.chars().skip(5).all(|c| c.is_ascii_digit());
         let is_antiga = upper.len() == 8
             && upper.chars().take(3).all(|c| c.is_ascii_alphabetic())
@@ -353,10 +365,12 @@ impl PlacaVeiculo {
         Ok(Self(upper))
     }
 
+    #[must_use]
     pub fn parse_unchecked(s: &str) -> Self {
         Self(s.to_uppercase())
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str { &self.0 }
 }
 

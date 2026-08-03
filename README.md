@@ -24,8 +24,10 @@
 - [Envelope de Resposta](#-envelope-de-resposta)
 - [Enriquecimento Detalhado](#-enriquecimento-detalhado)
 - [Uso TypeScript / Python](#-uso-typescript--python)
+- [Deno / WASM](#-deno--wasm)
 - [Testes](#-testes)
 - [Stack](#-stack)
+- [Documentação](#-documentação)
 - [Comparação com Wrappers Específicos](#-comparação-com-wrappers-específicos)
 
 ---
@@ -523,6 +525,51 @@ async-trait = "0.1"   # Async trait methods
 
 ---
 
+## 🌐 Deno / WASM
+
+openMTR também compila para WebAssembly e roda diretamente no **Deno 2+**.
+
+```bash
+# Build
+cargo build -p open-mtr-wasm --target wasm32-unknown-unknown --release
+wasm-bindgen target/wasm32-unknown-unknown/release/open_mtr_wasm.wasm \
+  --out-dir wasm/pkg --target web
+
+# Uso
+deno run --allow-read --allow-net wasm/examples/main.ts
+```
+
+```ts
+import init, { OpenMtrWasm } from "./pkg/open_mtr_wasm.js";
+
+await init();
+const client = new OpenMtrWasm();
+await client.init("sinir", token, "");
+
+const residuos = JSON.parse(await client.listar_residuos());
+// 895 resíduos retornados da API SINIR
+```
+
+O WASM usa `globalThis.fetch()` como transporte HTTP — **sem `reqwest`, sem `tokio`, sem `window`**.
+Funciona em Deno, navegadores, Bun e Cloudflare Workers.
+
+Ver [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) para documentação completa.
+
+---
+
+## 📚 Documentação
+
+| Recurso | Descrição |
+|---------|-----------|
+| [docs/wiki/00-index.md](docs/wiki/00-index.md) | Índice da documentação |
+| [docs/wiki/09-http-transport.md](docs/wiki/09-http-transport.md) | Trait `HttpTransport` + `MtrHttpClient` + polyfills WASM |
+| [docs/wiki/10-bindings.md](docs/wiki/10-bindings.md) | Targets: napi-rs, UniFFI, WASM |
+| [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) | Integração Deno/WASM completa |
+| [docs/wiki/12-architecture-refactored.md](docs/wiki/12-architecture-refactored.md) | Mapa completo da arquitetura |
+| [docs/AGENTS.md](docs/AGENTS.md) | Guia do agente para desenvolvimento |
+
+---
+
 ## 📋 Comparação: openMTR vs Wrapper Específico
 
 | Aspecto | Wrapper específico (ex: SDK SINIR) | openMTR |
@@ -533,7 +580,7 @@ async-trait = "0.1"   # Async trait methods
 | **Resposta** | `Result<Vec<T>>` | `Result<Resposta<T>, OpenMTRError>` com envelope RFC 9457 |
 | **Cache** | Geralmente embutido | Responsabilidade da aplicação final |
 | **Resíduos** | Só na criação | Via `detalhado: true` ou consulta por número |
-| **FFI** | N/A | napi-rs (Node.js) + UniFFI (Python/Kotlin/Swift) |
+| **FFI** | N/A | napi-rs (Node.js) + UniFFI (Python/Kotlin/Swift) + WASM (Deno/Web) |
 
 ---
 

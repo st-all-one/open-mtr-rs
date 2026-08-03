@@ -1,4 +1,4 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,9 @@ impl Periodo {
         Ok(Self { inicio, fim })
     }
 
+    #[must_use]
     pub fn ultimos_dias(dias: i64) -> Self {
-        let hoje = chrono::Utc::now().date_naive();
+        let hoje = crate::openmtr::time_util::utc_now().date_naive();
         let inicio = hoje - chrono::Duration::days(dias);
         Self {
             inicio: DataMtr(inicio),
@@ -105,7 +106,10 @@ pub struct Mtr {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Default)]
 pub enum StatusMtr {
+    #[default]
     Ativo,
     EmTransporte,
     Recebido,
@@ -114,11 +118,6 @@ pub enum StatusMtr {
     Outro(String),
 }
 
-impl Default for StatusMtr {
-    fn default() -> Self {
-        Self::Ativo
-    }
-}
 
 impl fmt::Display for StatusMtr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

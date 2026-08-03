@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc, clippy::return_self_not_must_use)]
+
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, error, info_span};
@@ -10,10 +12,11 @@ use crate::openmtr::domain::{
     MtrRecebido, ReceberMtr, ResiduoIbama, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
-use crate::openmtr::resposta::{Problema, Resposta};
+use crate::openmtr::resposta::Resposta;
 use crate::openmtr::system::System;
 use crate::openmtr::config::Config;
 use crate::openmtr::client::http::MtrHttpClient;
+use crate::openmtr::transport::HttpTransport;
 use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx};
 
 pub type MtrResult<T> = Result<Resposta<T>, OpenMTRError>;
@@ -24,8 +27,19 @@ pub struct OpenMtrClient {
 }
 
 impl OpenMtrClient {
+    #[must_use]
+    pub fn from_parts(ctx: Arc<MtrCtx>, adapter: Box<dyn MtrAdapter>) -> Self {
+        Self { ctx, adapter }
+    }
+
+    #[must_use]
     pub fn builder() -> OpenMtrClientBuilder {
         OpenMtrClientBuilder::default()
+    }
+
+    #[must_use]
+    pub fn system_name(&self) -> &'static str {
+        self.ctx.config.system.nome()
     }
 }
 
@@ -40,7 +54,7 @@ impl OpenMtrClient {
 
         match future.await {
             Ok(lote) => {
-                let erros: Vec<Problema> = lote.erros().into_iter().cloned().collect();
+                let erros: Vec<OpenMTRError> = lote.erros().into_iter().cloned().collect();
                 let dados: Vec<T> = lote.itens.into_iter().filter_map(|item| match item {
                     ItemResult::Ok(val) => Some(val),
                     ItemResult::Erro { .. } => None,
@@ -177,7 +191,7 @@ impl OpenMtrClient {
                     status: e.status,
                     mensagem: e.detail.clone(),
                     dados,
-                    erros: vec![Problema::api(e.status, e.detail)],
+                    erros: vec![OpenMTRError::api_error(e.status, e.detail)],
                     total: None,
                 })
             }
@@ -195,6 +209,7 @@ pub struct OpenMtrClientBuilder {
 }
 
 impl OpenMtrClientBuilder {
+    #[must_use]
     pub fn base(mut self, system: System) -> Self {
         self.system = Some(system);
         self
@@ -210,17 +225,30 @@ impl OpenMtrClientBuilder {
         self
     }
 
+    #[must_use]
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout = Some(Duration::from_secs(secs));
         self
     }
 
+    #[must_use]
     pub fn max_rps(mut self, rps: u32) -> Self {
         self.max_rps = Some(rps);
         self
     }
 
+    #[cfg(feature = "native-http")]
     pub async fn build(self) -> Result<OpenMtrClient, OpenMTRError> {
+        let transport = crate::openmtr::transport::reqwest::ReqwestTransport::new(
+            self.timeout.map_or(Duration::from_mins(1), |d| d),
+        )?;
+        self.build_with_transport(transport).await
+    }
+
+    pub async fn build_with_transport(
+        self,
+        transport: impl HttpTransport + 'static,
+    ) -> Result<OpenMtrClient, OpenMTRError> {
         let system = self.system.ok_or_else(|| {
             OpenMTRError::config("system é obrigatório — use .base(System::...)")
         })?;
@@ -237,11 +265,11 @@ impl OpenMtrClientBuilder {
             .system(system)
             .base_url(base_url)
             .token(integration_token.clone())
-            .timeout_secs(self.timeout.map(|d| d.as_secs()).unwrap_or(60))
+            .timeout_secs(self.timeout.map_or(60, |d| d.as_secs()))
             .max_rps(self.max_rps.unwrap_or(10))
             .build()?;
 
-        let http = MtrHttpClient::new(config.clone())?;
+        let http = MtrHttpClient::new(config.clone(), transport)?;
 
         let adapter = system.adapter()?;
 

@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::return_self_not_must_use, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use async_trait::async_trait;
 use futures::future::join_all;
 use serde_json::{json, Value};
@@ -12,7 +14,6 @@ use crate::openmtr::domain::{
     ResiduoCriacao, ResiduoIbama, StatusMtr, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
-use crate::openmtr::resposta::Problema;
 use crate::openmtr::system::System;
 
 fn map_status_sigor(descricao: &str) -> StatusMtr {
@@ -31,7 +32,7 @@ fn extrair_objeto(v: &Value) -> Option<&Value> {
 }
 
 fn tem_erro(v: &Value) -> bool {
-    v.get("erro").and_then(|b| b.as_bool()).unwrap_or(false)
+    v.get("erro").and_then(Value::as_bool).unwrap_or(false)
 }
 
 fn json_para_parte_sigor(v: &Value) -> Parte {
@@ -48,13 +49,13 @@ fn json_para_parte_sigor(v: &Value) -> Parte {
         endereco: v.get("parEndereco").and_then(|s| s.as_str()).map(String::from),
         municipio: v.get("parCidade").and_then(|s| s.as_str()).map(String::from),
         uf: v.get("parUf").and_then(|s| s.as_str()).map(String::from),
-        unidade: v.get("parCodigo").and_then(|n| n.as_i64()).map(|n| n as u32),
+        unidade: v.get("parCodigo").and_then(Value::as_i64).map(|n| n as u32),
     }
 }
 
 fn parse_timestamp_ms(v: &Value) -> Option<chrono::NaiveDate> {
     v.as_i64()
-        .and_then(|ts| chrono::DateTime::from_timestamp_millis(ts))
+        .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive())
 }
 
@@ -68,7 +69,7 @@ fn parse_data_br(v: &Value) -> Option<chrono::NaiveDate> {
 
 fn json_para_classe(v: &Value) -> ClasseResiduo {
     ClasseResiduo {
-        codigo: v.get("claCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("claCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("claDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         resolucao: None,
     }
@@ -76,7 +77,7 @@ fn json_para_classe(v: &Value) -> ClasseResiduo {
 
 fn json_para_unidade(v: &Value) -> UnidadeMedida {
     UnidadeMedida {
-        codigo: v.get("uniCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("uniCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("uniDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         sigla: v.get("uniSigla").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
@@ -84,21 +85,21 @@ fn json_para_unidade(v: &Value) -> UnidadeMedida {
 
 fn json_para_tratamento(v: &Value) -> TratamentoResiduo {
     TratamentoResiduo {
-        codigo: v.get("traCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("traCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("traDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
 }
 
 fn json_para_estado_fisico(v: &Value) -> EstadoFisico {
     EstadoFisico {
-        codigo: v.get("tieCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("tieCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("tieDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
 }
 
 fn json_para_acondicionamento(v: &Value) -> Acondicionamento {
     Acondicionamento {
-        codigo: v.get("tiaCodigo").and_then(|n| n.as_i64()).unwrap_or(0) as u32,
+        codigo: v.get("tiaCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
         descricao: v.get("tiaDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
 }
@@ -124,18 +125,18 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
     Residuo {
         codigo_ibama: res.and_then(|r| r.get("resCodigoIbama")).and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         descricao: res.and_then(|r| r.get("resDescricao")).and_then(|s| s.as_str()).map(String::from),
-        quantidade: v.get("marQuantidade").and_then(|n| n.as_f64()).unwrap_or(0.0),
-        unidade: unidade.and_then(|u| u.get("uniCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        estado_fisico: tipo_estado.and_then(|e| e.get("tieCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        classe: classe.and_then(|c| c.get("claCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        acondicionamento: acond.and_then(|a| a.get("tiaCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        tratamento: tratamento.and_then(|t| t.get("traCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
-        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(|n| n.as_f64()),
-        densidade: v.get("marDensidade").and_then(|n| n.as_f64()),
+        quantidade: v.get("marQuantidade").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
+        unidade: unidade.and_then(|u| u.get("uniCodigo")).and_then(Value::as_i64).map(|n| n as u32),
+        estado_fisico: tipo_estado.and_then(|e| e.get("tieCodigo")).and_then(Value::as_i64).map(|n| n as u32),
+        classe: classe.and_then(|c| c.get("claCodigo")).and_then(Value::as_i64).map(|n| n as u32),
+        acondicionamento: acond.and_then(|a| a.get("tiaCodigo")).and_then(Value::as_i64).map(|n| n as u32),
+        tratamento: tratamento.and_then(|t| t.get("traCodigo")).and_then(Value::as_i64).map(|n| n as u32),
+        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(serde_json::Value::as_f64),
+        densidade: v.get("marDensidade").and_then(serde_json::Value::as_f64),
         numero_onu: v.get("marNumeroONU").and_then(|s| s.as_str()).map(String::from),
         classe_risco: v.get("marClasseRisco").and_then(|s| s.as_str()).map(String::from),
         nome_embarque: v.get("marNomeEmbarque").and_then(|s| s.as_str()).map(String::from),
-        grupo_embalagem: gre.and_then(|g| g.get("greCodigo")).and_then(|n| n.as_i64()).map(|n| n as u32),
+        grupo_embalagem: gre.and_then(|g| g.get("greCodigo")).and_then(Value::as_i64).map(|n| n as u32),
         codigo_interno: v.get("codigoInterno").or_else(|| v.get("codigolinterno")).and_then(|s| s.as_str()).map(String::from),
         descricao_interna: v.get("descricaoInterna").or_else(|| v.get("descricaolnterna")).and_then(|s| s.as_str()).map(String::from),
     }
@@ -167,22 +168,22 @@ fn json_para_mtr(v: &Value) -> Mtr {
         observacao: v.get("manObservacao").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         motorista: v.get("manNomeMotorista").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         placa: v.get("manPlacaVeiculo").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        tipo_manifesto: v.get("tipoManifesto").and_then(|n| n.as_i64()).map(|n| n as i32),
+        tipo_manifesto: v.get("tipoManifesto").and_then(Value::as_i64).map(|n| n as i32),
         estado_uf: v.get("estado").and_then(|e| e.get("estAbreviacao")).and_then(|s| s.as_str()).map(String::from),
         data_expedicao: parse_timestamp_ms(&v["manDataExpedicao"]),
-        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(|b| b.as_bool()),
+        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(Value::as_bool),
         hash: v.get("manHashCode").and_then(|s| s.as_str()).map(String::from),
-        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(|b| b.as_bool()),
+        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(Value::as_bool),
         numero_estadual: v.get("manNumeroEstadual").and_then(|s| s.as_str()).map(String::from).filter(|s| !s.is_empty()),
-        codigo_estadual: v.get("manCodigoEstadual").and_then(|n| n.as_i64()),
+        codigo_estadual: v.get("manCodigoEstadual").and_then(Value::as_i64),
     }
 }
 
 fn json_para_mtr_criado(v: &Value) -> MtrCriado {
-    let valido = v.get("restResponseValido").and_then(|b| b.as_bool()).unwrap_or(false);
+    let valido = v.get("restResponseValido").and_then(Value::as_bool).unwrap_or(false);
     MtrCriado {
         numero: v.get("manifestoNumeroNacional").and_then(|s| s.as_str()).map(String::from),
-        codigo_gerado: v.get("codigoGerado").and_then(|n| n.as_i64()),
+        codigo_gerado: v.get("codigoGerado").and_then(Value::as_i64),
         sucesso: valido,
         mensagem: v.get("restResponseMensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
     }
@@ -240,7 +241,7 @@ fn criar_mtr_para_json(criar: &CriarMtr) -> Value {
 fn json_para_mtr_recebido(v: &Value) -> MtrRecebido {
     MtrRecebido {
         numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        recebido: v.get("restResponseValido").and_then(|b| b.as_bool()).unwrap_or(false),
+        recebido: v.get("restResponseValido").and_then(Value::as_bool).unwrap_or(false),
         mensagem: v.get("restResponseMensagem").and_then(|s| s.as_str()).map(String::from),
     }
 }
@@ -263,7 +264,7 @@ impl MtrAdapter for SigorAdapter {
             .integration_token
             .as_deref()
             .ok_or_else(|| OpenMTRError::config("integration_token é o JWT do SIGOR"))?;
-        ctx.http.set_token_direct(token).await;
+        ctx.http.set_token_direct(token);
         info!("Token SIGOR configurado diretamente (sem refresh)");
         Ok(token.to_string())
     }
@@ -305,8 +306,8 @@ impl MtrAdapter for SigorAdapter {
     ) -> Result<LoteResult<Mtr>, OpenMTRError> {
         let _span = info_span!("sigor.consultar_mtrs");
 
-        if let Some(ref nums) = filtro.numeros {
-            if !nums.is_empty() {
+        if let Some(ref nums) = filtro.numeros
+            && !nums.is_empty() {
                 let mut itens = Vec::with_capacity(nums.len());
                 for (indice, numero) in nums.iter().enumerate() {
                     let path = format!("/retornaManifesto/{numero}");
@@ -316,14 +317,14 @@ impl MtrAdapter for SigorAdapter {
                                 let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or("Erro");
                                 itens.push(ItemResult::Erro {
                                     indice,
-                                    problema: Problema::not_found(msg),
+                                    problema: OpenMTRError::not_found(msg),
                                 });
                             } else {
                                 match extrair_objeto(&resp) {
                                     Some(detail) => itens.push(ItemResult::Ok(json_para_mtr(detail))),
                                     None => itens.push(ItemResult::Erro {
                                         indice,
-                                        problema: Problema::not_found("Resposta vazia do SIGOR"),
+                                        problema: OpenMTRError::not_found("Resposta vazia do SIGOR"),
                                     }),
                                 }
                             }
@@ -331,14 +332,13 @@ impl MtrAdapter for SigorAdapter {
                         Err(e) => {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::api(502, e.to_string()),
+                                problema: OpenMTRError::api_error(502, e.to_string()),
                             });
                         }
                     }
                 }
                 return Ok(LoteResult::new(itens));
             }
-        }
 
         Err(OpenMTRError::not_supported(
             "SIGOR: consulta sem número via lista de período não implementada",
@@ -362,18 +362,18 @@ impl MtrAdapter for SigorAdapter {
                 .await
             {
                 Ok(resp) => {
-                    if resp.get("restResponseValido").and_then(|b| b.as_bool()).unwrap_or(false) {
+                    if resp.get("restResponseValido").and_then(Value::as_bool).unwrap_or(false) {
                         itens.push(ItemResult::Ok(json_para_mtr_criado(&resp)));
                     } else {
                         let msg = resp.get("restResponseMensagem")
                             .and_then(|s| s.as_str())
                             .unwrap_or("Erro na criação");
-                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
+                        itens.push(ItemResult::Erro { indice, problema: OpenMTRError::validation(msg) });
                     }
                 }
                 Err(e) => {
                     warn!(erro = %e, "Falha ao criar MTR no SIGOR");
-                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                    itens.push(ItemResult::Erro { indice, problema: OpenMTRError::api_error(502, e.to_string()) });
                 }
             }
         }
@@ -390,7 +390,7 @@ impl MtrAdapter for SigorAdapter {
         let mut itens = Vec::with_capacity(lotes.len());
 
         for (indice, receber) in lotes.into_iter().enumerate() {
-            let items: Vec<Value> = receber
+            let res_items: Vec<Value> = receber
                 .residuos_recebidos
                 .iter()
                 .map(|r| {
@@ -418,7 +418,7 @@ impl MtrAdapter for SigorAdapter {
                 "placaVeiculo": receber.placa_veiculo.as_deref().unwrap_or("ABC1234"),
                 "nomeResponsavelRecebimento": receber.responsavel,
                 "observacoes": receber.observacoes,
-                "listaManifestoResiduo": items,
+                "listaManifestoResiduo": res_items,
             }]);
 
             match ctx.http.post::<Value, _>("/receberManifestoLote", &body, "receber_mtr").await {
@@ -426,7 +426,7 @@ impl MtrAdapter for SigorAdapter {
                     let dtos = resp.get("objetoResposta")
                         .and_then(|a| a.as_array()).cloned().unwrap_or_default();
                     if dtos.is_empty() {
-                        itens.push(ItemResult::Erro { indice, problema: Problema::validation("Resposta vazia") });
+                        itens.push(ItemResult::Erro { indice, problema: OpenMTRError::validation("Resposta vazia") });
                         continue;
                     }
                     for dto in &dtos {
@@ -436,13 +436,13 @@ impl MtrAdapter for SigorAdapter {
                         } else {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::validation(recebido.mensagem.unwrap_or_default()),
+                                problema: OpenMTRError::validation(recebido.mensagem.unwrap_or_default()),
                             });
                         }
                     }
                 }
                 Err(e) => {
-                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                    itens.push(ItemResult::Erro { indice, problema: OpenMTRError::api_error(502, e.to_string()) });
                 }
             }
         }
@@ -464,19 +464,19 @@ impl MtrAdapter for SigorAdapter {
             let body = json!({ "manNumero": req.numero, "justificativa": req.justificativa });
             match ctx.http.post::<Value, _>("/cancelarManifesto", &body, "cancelar_mtr").await {
                 Ok(resp) => {
-                    if !tem_erro(&resp) {
+                    if tem_erro(&resp) {
+                        let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or("Erro");
+                        itens.push(ItemResult::Erro { indice: 0, problema: OpenMTRError::validation(msg) });
+                    } else {
                         itens.push(ItemResult::Ok(MtrCancelado {
                             numero: req.numero.clone(),
                             status: "Cancelado".into(),
                             data_cancelamento: None,
                         }));
-                    } else {
-                        let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or("Erro");
-                        itens.push(ItemResult::Erro { indice: 0, problema: Problema::validation(msg) });
                     }
                 }
                 Err(e) => {
-                    itens.push(ItemResult::Erro { indice: 0, problema: Problema::api(502, e.to_string()) });
+                    itens.push(ItemResult::Erro { indice: 0, problema: OpenMTRError::api_error(502, e.to_string()) });
                 }
             }
         } else {
@@ -490,24 +490,24 @@ impl MtrAdapter for SigorAdapter {
                     let results = resp.get("objetoResposta")
                         .and_then(|a| a.as_array()).cloned().unwrap_or_default();
                     for (i, dto) in results.iter().enumerate() {
-                        let erro = dto.get("erro").and_then(|b| b.as_bool()).unwrap_or(true);
+                        let erro = dto.get("erro").and_then(Value::as_bool).unwrap_or(true);
                         let man_num = dto.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default();
-                        if !erro {
+                        if erro {
+                            let msg = dto.get("mensgaemRetorno").and_then(|s| s.as_str()).unwrap_or("Erro");
+                            itens.push(ItemResult::Erro { indice: i, problema: OpenMTRError::validation(msg) });
+                        } else {
                             itens.push(ItemResult::Ok(MtrCancelado {
                                 numero: man_num.to_string(),
                                 status: "Cancelado".into(),
                                 data_cancelamento: None,
                             }));
-                        } else {
-                            let msg = dto.get("mensgaemRetorno").and_then(|s| s.as_str()).unwrap_or("Erro");
-                            itens.push(ItemResult::Erro { indice: i, problema: Problema::validation(msg) });
                         }
                     }
                 }
                 Err(e) => {
                     let msg = e.to_string();
                     for i in 0..reqs.len() {
-                        itens.push(ItemResult::Erro { indice: i, problema: Problema::api(502, msg.clone()) });
+                        itens.push(ItemResult::Erro { indice: i, problema: OpenMTRError::api_error(502, msg.clone()) });
                     }
                 }
             }
@@ -528,7 +528,7 @@ impl MtrAdapter for SigorAdapter {
             match req.tipo {
                 ModificacaoTipo::Recebimento => {
                     let novos = req.novos_residuos.unwrap_or_default();
-                    let items: Vec<Value> = novos.iter().map(|r| {
+                    let novos_itens: Vec<Value> = novos.iter().map(|r| {
                         let mut item = json!({
                             "resCodigoIbama": r.codigo_ibama,
                             "marQuantidade": r.quantidade_recebida,
@@ -546,7 +546,7 @@ impl MtrAdapter for SigorAdapter {
                         "remObservacao": req.justificativa,
                         "manifesto": {
                             "manNumero": req.numero,
-                            "listaManifestoResiduo": items,
+                "listaManifestoResiduo": novos_itens,
                         }
                     });
 
@@ -561,7 +561,7 @@ impl MtrAdapter for SigorAdapter {
                         Err(e) => {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: Problema::api(502, e.to_string()),
+                                problema: OpenMTRError::api_error(502, e.to_string()),
                             });
                         }
                     }
@@ -569,7 +569,7 @@ impl MtrAdapter for SigorAdapter {
                 _ => {
                     itens.push(ItemResult::Erro {
                         indice,
-                        problema: Problema::validation(format!(
+                        problema: OpenMTRError::validation(format!(
                             "Tipo de modificação não suportado no SIGOR: {:?}", req.tipo
                         )),
                     });
@@ -605,7 +605,7 @@ impl MtrAdapter for SigorAdapter {
                     }
                     Err(e) => ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     },
                 }
             }
@@ -638,21 +638,21 @@ impl MtrAdapter for SigorAdapter {
 
             match ctx.http.post::<Value, _>("/emiteCDF", &body, "gerar_cdf").await {
                 Ok(resp) => {
-                    let valido = resp.get("restResponseValido").and_then(|b| b.as_bool()).unwrap_or(false);
+                    let valido = resp.get("restResponseValido").and_then(Value::as_bool).unwrap_or(false);
                     if valido {
                         itens.push(ItemResult::Ok(CdfEmitido {
-                            codigo: resp.get("numeroCDF").and_then(|n| n.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
+                            codigo: resp.get("numeroCDF").and_then(Value::as_i64).map(|n| n.to_string()).unwrap_or_default(),
                             numero: String::new(),
-                            data_emissao: chrono::Utc::now().date_naive(),
+                            data_emissao: crate::openmtr::time_util::utc_now().date_naive(),
                             status: String::new(),
                         }));
                     } else {
                         let msg = resp.get("restResponseMensagem").and_then(|s| s.as_str()).unwrap_or("Erro");
-                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
+                        itens.push(ItemResult::Erro { indice, problema: OpenMTRError::validation(msg) });
                     }
                 }
                 Err(e) => {
-                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                    itens.push(ItemResult::Erro { indice, problema: OpenMTRError::api_error(502, e.to_string()) });
                 }
             }
         }
@@ -693,7 +693,7 @@ impl MtrAdapter for SigorAdapter {
                     }
                     Err(e) => ItemResult::Erro {
                         indice,
-                        problema: Problema::api(502, e.to_string()),
+                        problema: OpenMTRError::api_error(502, e.to_string()),
                     },
                 }
             }
@@ -810,10 +810,10 @@ impl MtrAdapter for SigorAdapter {
         let response: Value = ctx.http.post("/salvarManifestoComplementar", &body, "criar_complementar").await?;
         match extrair_objeto(&response) {
             Some(obj) => {
-                let valido = obj.get("restResponseValido").and_then(|b| b.as_bool()).unwrap_or(false);
+                let valido = obj.get("restResponseValido").and_then(Value::as_bool).unwrap_or(false);
                 Ok(MtrCriado {
-                    numero: obj.get("manifestoComplementar").and_then(|n| n.as_i64()).map(|n| n.to_string()),
-                    codigo_gerado: obj.get("manifestoComplementar").and_then(|n| n.as_i64()),
+                    numero: obj.get("manifestoComplementar").and_then(Value::as_i64).map(|n| n.to_string()),
+                    codigo_gerado: obj.get("manifestoComplementar").and_then(Value::as_i64),
                     sucesso: valido,
                     mensagem: obj.get("restResponseMensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
                 })
@@ -841,18 +841,18 @@ impl MtrAdapter for SigorAdapter {
                 Ok(resp) => {
                     let erro = tem_erro(&resp);
                     let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or_default();
-                    if !erro {
+                    if erro {
+                        itens.push(ItemResult::Erro { indice, problema: OpenMTRError::validation(msg) });
+                    } else {
                         itens.push(ItemResult::Ok(AlteracaoAceita {
                             numero: req.numero,
                             aceita: req.aceitar,
                             mensagem: msg.to_string(),
                         }));
-                    } else {
-                        itens.push(ItemResult::Erro { indice, problema: Problema::validation(msg) });
                     }
                 }
                 Err(e) => {
-                    itens.push(ItemResult::Erro { indice, problema: Problema::api(502, e.to_string()) });
+                    itens.push(ItemResult::Erro { indice, problema: OpenMTRError::api_error(502, e.to_string()) });
                 }
             }
         }

@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Default)]
 pub enum TipoParte {
+    #[default]
     Gerador,
     Transportador,
     Destinador,
@@ -12,11 +15,6 @@ pub enum TipoParte {
     Outro(String),
 }
 
-impl Default for TipoParte {
-    fn default() -> Self {
-        Self::Gerador
-    }
-}
 
 impl fmt::Display for TipoParte {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -31,6 +29,7 @@ impl fmt::Display for TipoParte {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum TipoManifesto {
     Padrao,
     Complementar,
@@ -41,6 +40,7 @@ pub enum TipoManifesto {
 }
 
 impl TipoManifesto {
+    #[must_use]
     pub fn codigo(&self) -> i32 {
         match self {
             Self::Padrao => 1,
@@ -67,6 +67,7 @@ impl fmt::Display for TipoManifesto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum FormatoDownload {
     Pdf,
     Xml,

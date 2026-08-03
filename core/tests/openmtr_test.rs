@@ -40,7 +40,7 @@ fn test_resposta_types() {
     assert!(r.erros.is_empty());
 
     let r2 = Resposta::<String>::com_erros(id, vec![
-        Problema::validation("erro de teste")
+        OpenMTRError::validation("erro de teste")
     ]);
     assert!(!r2.ok);
     assert!(r2.tem_erros());
