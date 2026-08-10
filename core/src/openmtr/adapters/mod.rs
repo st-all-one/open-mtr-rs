@@ -7,6 +7,7 @@ use crate::openmtr::domain::{
     MtrRecebido, ReceberMtr, ResiduoIbama, TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
+use crate::openmtr::open_mtr_auth::AuthParams;
 use crate::openmtr::config::Config;
 use crate::openmtr::client::http::{MtrHttpClient, RawResponse};
 use crate::openmtr::system::System;
@@ -91,9 +92,7 @@ pub trait MtrAdapter: Send + Sync {
     async fn autenticar_credenciais(
         &self,
         ctx: &MtrCtx,
-        cpf: &str,
-        senha: &str,
-        unidade: u32,
+        params: &AuthParams,
     ) -> Result<String, OpenMTRError>;
 
     async fn consultar_mtrs(

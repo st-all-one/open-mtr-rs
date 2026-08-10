@@ -1,4 +1,8 @@
-namespace open_mtr {};
+namespace open_mtr {
+  // Autenticação clássica (CPF + senha) — obtém o token JWT de sistemas como MTR-PE/SIGOR.
+  [Throws=OpenMtrError]
+  string obter_token(string system, string params_json);
+};
 
 [Error]
 enum OpenMtrError {

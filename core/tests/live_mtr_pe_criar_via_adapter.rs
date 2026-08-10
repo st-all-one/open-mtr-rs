@@ -29,7 +29,7 @@ async fn test_pe_criar_via_adapter() {
         return;
     }
 
-    println!("🔐 Autenticando no MTR-PE via OpenMtrAuthBuilder...");
+    println!("🔐 Autenticando no MTR-PE via OpenMtrClassicAuth...");
 
     let cnpj_str = env("MTR_PE_CNPJ");
     let cpf = env("MTR_PE_CPF_USER");
@@ -37,10 +37,13 @@ async fn test_pe_criar_via_adapter() {
     let unity: u32 = env("MTR_PE_UNITY").parse().unwrap();
 
     // 1. Autentica via CPF+senha+cnpj
-    let token = OpenMtrAuthBuilder::default()
-        .base(System::MtrPe)
-        .credenciais(&cpf, &password, unity)
-        .cnpj(&cnpj_str)
+    let token = OpenMtrClassicAuth::new(System::MtrPe)
+        .params(AuthParams::CpfSenhaUnidade {
+            cpf: cpf.clone(),
+            senha: password.clone(),
+            unidade: unity,
+            cnpj: Some(cnpj_str.clone()),
+        })
         .timeout_secs(60)
         .build()
         .await

@@ -158,13 +158,14 @@ barcodes) e `core/examples/baixar_mtr_pe_pdfs.rs` (baixa os PDFs em `mtrs/pe/`).
 ```rust
 use open_mtr_core::*;
 
-// Autenticação
-let token = OpenMtrAuthBuilder::default()
-    .base(System::MtrPe)
-    .credenciais("07800211428", "NORLU", 3623)
-    .cnpj("15805619000140")
-    .build()
-    .await?;
+// Autenticação clássica (CPF + senha + unidade + CNPJ)
+let params = AuthParams::CpfSenhaUnidade {
+    cpf: "07800211428".into(),
+    senha: "NORLU".into(),
+    unidade: 3623,
+    cnpj: Some("15805619000140".into()),
+};
+let token = OpenMtrClassicAuth::obter_token(System::MtrPe, &params).await?;
 
 // Cliente
 let mtr = OpenMtrClient::builder()

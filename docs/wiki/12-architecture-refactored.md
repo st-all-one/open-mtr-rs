@@ -93,7 +93,7 @@ open-mtr-rs/
 │       ├── system.rs        # enum System
 │       ├── time_util.rs     # utc_now() polyfill WASM
 │       ├── open_mtr_client.rs  # OpenMtrClient + Builder
-│       ├── open_mtr_auth.rs    # OpenMtrAuthBuilder (legado)
+│       ├── open_mtr_auth.rs    # OpenMtrClassicAuth (CPF+senha → token) + AuthParams
 │       └── prelude.rs       # re-exports públicos
 ├── napi/
 │   ├── Cargo.toml           # open-mtr-napi (cdylib)

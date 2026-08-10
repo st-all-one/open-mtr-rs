@@ -33,10 +33,13 @@ async fn test_mtr_pe_consultar_por_periodo_generico() {
     let password = std::env::var("MTR_PE_PASSWORD").unwrap();
     let unity: u32 = std::env::var("MTR_PE_UNITY").unwrap().parse().unwrap();
 
-    let token = OpenMtrAuthBuilder::default()
-        .base(System::MtrPe)
-        .credenciais(&cpf, &password, unity)
-        .cnpj(&cnpj)
+    let token = OpenMtrClassicAuth::new(System::MtrPe)
+        .params(AuthParams::CpfSenhaUnidade {
+            cpf: cpf.clone(),
+            senha: password.clone(),
+            unidade: unity,
+            cnpj: Some(cnpj.clone()),
+        })
         .timeout_secs(60)
         .build()
         .await

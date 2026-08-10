@@ -11,4 +11,4 @@ pub use crate::openmtr::error::OpenMTRError;
 pub use crate::openmtr::resposta::Resposta;
 pub use crate::openmtr::system::System;
 pub use crate::openmtr::open_mtr_client::{MtrResult, OpenMtrClient, OpenMtrClientBuilder};
-pub use crate::openmtr::open_mtr_auth::OpenMtrAuthBuilder;
+pub use crate::openmtr::open_mtr_auth::{AuthParams, OpenMtrAuthBuilder, OpenMtrClassicAuth};

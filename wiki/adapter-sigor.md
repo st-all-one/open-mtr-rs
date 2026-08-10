@@ -170,17 +170,19 @@ for m in &resp.dados {
 }
 ```
 
-### Autenticação por CPF + senha (credenciais legado)
+### Autenticação por CPF + senha (credenciais clássicas)
 
 ```rust
 use open_mtr_core::*;
 
-// 1. Obtém o token via credenciais
-let token = OpenMtrAuthBuilder::default()
-    .base(System::Sigor)
-    .credenciais("07800211428", "a34r3e", 189788)
-    .build()
-    .await?;
+// 1. Obtém o token via credenciais (OpenMtrClassicAuth — SIGOR ignora o cnpj)
+let params = AuthParams::CpfSenhaUnidade {
+    cpf: "07800211428".into(),
+    senha: "a34r3e".into(),
+    unidade: 189788,
+    cnpj: None,
+};
+let token = OpenMtrClassicAuth::obter_token(System::Sigor, &params).await?;
 
 // 2. Usa o token no cliente
 let client = OpenMtrClient::builder()

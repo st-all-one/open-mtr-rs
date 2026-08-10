@@ -46,20 +46,67 @@ impl Serialize for Periodo {
     }
 }
 
+/// Converte um valor de data recebido nos bindings em `NaiveDate`.
+///
+/// Aceita (como o JS costuma enviar):
+/// - String `dd-MM-yyyy` (formato canônico do wrapper);
+/// - String ISO 8601 — ex.: o que `JSON.stringify(new Date())` produz,
+///   `"2026-06-01T00:00:00.000Z"`, ou `"2026-06-01"`;
+/// - Número (timestamp em milissegundos desde Unix epoch).
+fn data_flexivel(v: &serde_json::Value) -> Option<NaiveDate> {
+    match v {
+        serde_json::Value::String(s) => {
+            if let Ok(d) = NaiveDate::parse_from_str(s, "%d-%m-%Y") {
+                return Some(d);
+            }
+            if let Ok(d) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                return Some(d);
+            }
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+                return Some(dt.date_naive());
+            }
+            None
+        }
+        serde_json::Value::Number(n) => n
+            .as_i64()
+            .and_then(chrono::DateTime::from_timestamp_millis)
+            .map(|dt| dt.date_naive()),
+        _ => None,
+    }
+}
+
 impl<'de> Deserialize<'de> for Periodo {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
-        struct Raw {
-            #[serde(rename = "dataInicial")]
-            data_inicial: DataMtr,
-            #[serde(rename = "dataFinal")]
-            data_final: DataMtr,
+        #[serde(untagged)]
+        enum PeriodoRaw {
+            /// Últimos N dias até hoje (atalho usado nos bindings).
+            Dias { dias: i64 },
+            /// Intervalo explícito — datas em `dd-MM-yyyy`, ISO 8601
+            /// (`new Date()` no JS) ou timestamp em ms.
+            Intervalo {
+                #[serde(rename = "dataInicial")]
+                data_inicial: serde_json::Value,
+                #[serde(rename = "dataFinal")]
+                data_final: serde_json::Value,
+            },
         }
-        let raw = Raw::deserialize(d)?;
-        Ok(Self {
-            inicio: raw.data_inicial,
-            fim: raw.data_final,
-        })
+        match PeriodoRaw::deserialize(d)? {
+            PeriodoRaw::Dias { dias } => Ok(Self::ultimos_dias(dias)),
+            PeriodoRaw::Intervalo { data_inicial, data_final } => {
+                let inicio = DataMtr(data_flexivel(&data_inicial).ok_or_else(|| {
+                    serde::de::Error::custom(format!(
+                        "dataInicial inválida: {data_inicial} (use dd-MM-yyyy, ISO 8601 ou timestamp)"
+                    ))
+                })?);
+                let fim = DataMtr(data_flexivel(&data_final).ok_or_else(|| {
+                    serde::de::Error::custom(format!(
+                        "dataFinal inválida: {data_final} (use dd-MM-yyyy, ISO 8601 ou timestamp)"
+                    ))
+                })?);
+                Self::new(inicio, fim).map_err(serde::de::Error::custom)
+            }
+        }
     }
 }
 
@@ -163,4 +210,95 @@ pub struct FiltroParte {
     pub documento: Option<CpfCnpj>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unidade: Option<u32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_periodo_deserializa_intervalo() {
+        let p: Periodo =
+            serde_json::from_str(r#"{"dataInicial":"01-06-2026","dataFinal":"10-08-2026"}"#)
+                .expect("intervalo válido");
+        assert_eq!(p.inicio.0, NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida"));
+        assert_eq!(p.fim.0, NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida"));
+    }
+
+    #[test]
+    fn test_periodo_deserializa_iso8601_new_date() {
+        // Equivalente ao que JSON.stringify(new Date()) produz no JS
+        let p: Periodo = serde_json::from_str(
+            r#"{"dataInicial":"2026-06-01T00:00:00.000Z","dataFinal":"2026-08-10T12:30:00.000Z"}"#,
+        )
+        .expect("ISO 8601 válido");
+        assert_eq!(p.inicio.0, NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida"));
+        assert_eq!(p.fim.0, NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida"));
+    }
+
+    #[test]
+    fn test_periodo_deserializa_iso8601_data_simples() {
+        let p: Periodo =
+            serde_json::from_str(r#"{"dataInicial":"2026-06-01","dataFinal":"2026-08-10"}"#)
+                .expect("ISO data simples");
+        assert_eq!(p.inicio.0, NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida"));
+        assert_eq!(p.fim.0, NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida"));
+    }
+
+    #[test]
+    fn test_periodo_deserializa_timestamp_ms() {
+        let inicio = NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida");
+        let fim = NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida");
+        let ts_inicio = inicio.and_hms_opt(0, 0, 0).expect("hora válida").and_utc().timestamp_millis();
+        let ts_fim = fim.and_hms_opt(0, 0, 0).expect("hora válida").and_utc().timestamp_millis();
+        let p: Periodo = serde_json::from_str(&format!(
+            r#"{{"dataInicial":{ts_inicio},"dataFinal":{ts_fim}}}"#
+        ))
+        .expect("timestamp válido");
+        assert_eq!(p.inicio.0, inicio);
+        assert_eq!(p.fim.0, fim);
+    }
+
+    #[test]
+    fn test_periodo_deserializa_data_invalida() {
+        let result: Result<Periodo, _> = serde_json::from_str(
+            r#"{"dataInicial":"31-13-2026","dataFinal":"10-08-2026"}"#,
+        );
+        assert!(result.is_err(), "data inválida deve falhar");
+    }
+
+    #[test]
+    fn test_periodo_deserializa_dias() {
+        let hoje = crate::openmtr::time_util::utc_now().date_naive();
+        let p: Periodo = serde_json::from_str(r#"{"dias":7}"#).expect("atalho dias");
+        assert_eq!(p.fim.0, hoje);
+        assert_eq!(p.inicio.0, hoje - chrono::Duration::days(7));
+    }
+
+    #[test]
+    fn test_periodo_deserializa_intervalo_invertido() {
+        let result: Result<Periodo, _> =
+            serde_json::from_str(r#"{"dataInicial":"10-08-2026","dataFinal":"01-06-2026"}"#);
+        assert!(result.is_err(), "intervalo invertido deve falhar");
+    }
+
+    #[test]
+    fn test_periodo_serializa_intervalo() {
+        let p = Periodo::new(
+            DataMtr(NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")),
+            DataMtr(NaiveDate::from_ymd_opt(2026, 6, 30).expect("data válida")),
+        )
+        .expect("período válido");
+        let json = serde_json::to_string(&p).expect("serialize");
+        assert!(json.contains(r#""dataInicial":"01-06-2026""#));
+        assert!(json.contains(r#""dataFinal":"30-06-2026""#));
+    }
+
+    #[test]
+    fn test_filtro_mtr_aceita_dias() {
+        let f: FiltroMtr = serde_json::from_str(r#"{"periodo":{"dias":7},"tamanho":5}"#)
+            .expect("filtro com dias");
+        assert!(f.periodo.is_some());
+        assert_eq!(f.tamanho, Some(5));
+    }
 }

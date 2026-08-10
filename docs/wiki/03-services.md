@@ -12,7 +12,7 @@ pub(crate) trait MtrAdapter: Send + Sync {
 
     // Auth
     async fn autenticar_token(&self, ctx: &MtrCtx) -> Result<String, OpenMTRError>;
-    async fn autenticar_credenciais(&self, ctx: &MtrCtx, ...) -> Result<String, OpenMTRError>;
+    async fn autenticar_credenciais(&self, ctx: &MtrCtx, params: &AuthParams) -> Result<String, OpenMTRError>;
 
     // 15 métodos de negócio (todos retornam LoteResult<T>)
     async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError>;

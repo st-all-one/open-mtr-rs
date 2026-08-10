@@ -201,6 +201,27 @@ export class OpenMtrWasm {
         return this;
     }
     /**
+     * Obtém o token de autenticação clássica (CPF + senha) para sistemas que
+     * o exigem (ex.: MTR-PE, SIGOR), **sem** depender de um cliente
+     * instanciado. Ideal para servidores Deno/SSR que precisam gerar o token
+     * e então chamar `init(system, token, "")`.
+     *
+     * `params_json`: `{"tipo":"cpf_senha_unidade","cpf":"...","senha":"...","unidade":123,"cnpj":"..."}`
+     *
+     * Retorna `{"ok":true,"token":"..."}` ou `{"ok":false,"mensagem":"..."}`.
+     * @param {string} system
+     * @param {string} params_json
+     * @returns {Promise<string>}
+     */
+    obter_token(system, params_json) {
+        const ptr0 = passStringToWasm0(system, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(params_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.openmtrwasm_obter_token(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+        return takeObject(ret);
+    }
+    /**
      * @param {string} json
      * @returns {Promise<string>}
      */
@@ -310,7 +331,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_905(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_961(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -380,8 +401,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_608);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 44, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_653);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
@@ -403,10 +424,10 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_608(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_653(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_608(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_653(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -417,8 +438,8 @@ function __wasm_bindgen_func_elem_608(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_905(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_905(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_961(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_961(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
 const OpenMtrWasmFinalization = (typeof FinalizationRegistry === 'undefined')

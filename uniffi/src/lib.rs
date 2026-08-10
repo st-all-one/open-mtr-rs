@@ -60,6 +60,23 @@ impl std::fmt::Display for OpenMtrError {
 
 impl std::error::Error for OpenMtrError {}
 
+/// Obtém o token de autenticação clássica (CPF + senha) para sistemas que o
+/// exigem (ex.: MTR-PE, SIGOR). Não depende de um cliente instanciado.
+///
+/// `params_json`: `{"tipo":"cpf_senha_unidade","cpf":"...","senha":"...","unidade":123,"cnpj":"..."}`
+///
+/// Retorna o token JWT diretamente.
+pub fn obter_token(system: String, params_json: String) -> Result<String, OpenMtrError> {
+    let sys: open_mtr_core::System = system
+        .parse()
+        .map_err(|_: String| OpenMtrError::Config)?;
+    let params: AuthParams = parse_json(&params_json)?;
+    let token = runtime()
+        .block_on(open_mtr_core::OpenMtrClassicAuth::new(sys).params(params).build())
+        .map_err(map_error)?;
+    Ok(token)
+}
+
 pub struct OpenMtrClient {
     inner: open_mtr_core::OpenMtrClient,
 }

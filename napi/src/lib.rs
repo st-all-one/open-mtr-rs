@@ -53,6 +53,27 @@ fn map_err(e: OpenMTRError) -> napi::Error {
     napi::Error::from_reason(e.to_string())
 }
 
+/// Obtém o token de autenticação clássica (CPF + senha) para sistemas que o
+/// exigem (ex.: MTR-PE, SIGOR). Não depende de um cliente instanciado.
+///
+/// `params_json`: `{"tipo":"cpf_senha_unidade","cpf":"...","senha":"...","unidade":123,"cnpj":"..."}`
+///
+/// Retorna `{ ok, token }` no campo `dados[0]` do envelope.
+#[napi]
+pub async fn obter_token(system: String, params_json: String) -> Result<String> {
+    let system: open_mtr_core::System = system
+        .parse()
+        .map_err(|e: String| napi::Error::from_reason(e))?;
+    let params: open_mtr_core::AuthParams = serde_json::from_str(&params_json)
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let token = open_mtr_core::OpenMtrClassicAuth::new(system)
+        .params(params)
+        .build()
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(serde_json::json!({ "ok": true, "token": token }).to_string())
+}
+
 #[napi(object)]
 pub struct RespostaJson {
     pub id: String,

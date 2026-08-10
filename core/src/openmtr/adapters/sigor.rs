@@ -273,11 +273,21 @@ impl MtrAdapter for SigorAdapter {
     async fn autenticar_credenciais(
         &self,
         ctx: &MtrCtx,
-        cpf: &str,
-        senha: &str,
-        unidade: u32,
+        params: &crate::openmtr::open_mtr_auth::AuthParams,
     ) -> Result<String, OpenMTRError> {
         let _span = info_span!("sigor.autenticar_credenciais");
+
+        #[allow(unreachable_patterns)] // defensivo: enum #[non_exhaustive]
+        let (cpf, senha, unidade) = match params {
+            crate::openmtr::open_mtr_auth::AuthParams::CpfSenhaUnidade { cpf, senha, unidade, .. } => {
+                (cpf.clone(), senha.clone(), *unidade)
+            }
+            _ => {
+                return Err(OpenMTRError::validation(
+                    "SIGOR exige AuthParams::CpfSenhaUnidade",
+                ));
+            }
+        };
 
         let body = json!({
             "cpfCnpj": cpf,

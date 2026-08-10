@@ -145,7 +145,7 @@ console.log(`Total: ${residuos.dados.length}`); // 895
 
 // Consultar MTRs
 const mtrs = JSON.parse(await client.consultar_mtrs(JSON.stringify({
-    periodo: { dias: 7 },
+    periodo: { dias: 7 },   // atalho: últimos 7 dias
     tamanho: 5
 })));
 console.log(`MTRs: ${mtrs.dados.length}`);
@@ -153,6 +153,22 @@ console.log(`MTRs: ${mtrs.dados.length}`);
 // Health check
 const health = JSON.parse(await client.health());
 console.log(health.mensagem);
+```
+
+### Formato do período no JSON
+
+O `periodo` aceita 3 formas — o Rust resolve internamente para o formato que
+cada sistema espera (ex.: `dd-MM-yyyy` no SINIR/MTR-PE):
+
+```js
+// 1. Atalho: últimos N dias até hoje
+periodo: { dias: 30 }
+
+// 2. Objeto Date do JS (new Date()) — serializado como ISO 8601
+periodo: { dataInicial: new Date(Date.now() - 30*864e5), dataFinal: new Date() }
+
+// 3. Intervalo explícito dd-MM-yyyy (ou ISO 8601 / timestamp ms)
+periodo: { dataInicial: "01-06-2026", dataFinal: "10-08-2026" }
 ```
 
 ## Compatibilidade de Runtime

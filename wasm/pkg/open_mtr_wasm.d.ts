@@ -25,6 +25,17 @@ export class OpenMtrWasm {
     listar_unidades(): Promise<string>;
     modificar_mtrs(json: string): Promise<string>;
     constructor();
+    /**
+     * Obtém o token de autenticação clássica (CPF + senha) para sistemas que
+     * o exigem (ex.: MTR-PE, SIGOR), **sem** depender de um cliente
+     * instanciado. Ideal para servidores Deno/SSR que precisam gerar o token
+     * e então chamar `init(system, token, "")`.
+     *
+     * `params_json`: `{"tipo":"cpf_senha_unidade","cpf":"...","senha":"...","unidade":123,"cnpj":"..."}`
+     *
+     * Retorna `{"ok":true,"token":"..."}` ou `{"ok":false,"mensagem":"..."}`.
+     */
+    obter_token(system: string, params_json: string): Promise<string>;
     receber_mtrs(json: string): Promise<string>;
 }
 
@@ -54,9 +65,10 @@ export interface InitOutput {
     readonly openmtrwasm_listar_unidades: (a: number) => number;
     readonly openmtrwasm_modificar_mtrs: (a: number, b: number, c: number) => number;
     readonly openmtrwasm_new: () => number;
+    readonly openmtrwasm_obter_token: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly openmtrwasm_receber_mtrs: (a: number, b: number, c: number) => number;
-    readonly __wasm_bindgen_func_elem_608: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_905: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_653: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_961: (a: number, b: number, c: number, d: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;

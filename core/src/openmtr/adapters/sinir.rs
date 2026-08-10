@@ -412,6 +412,13 @@ impl MtrAdapter for SinirAdapter {
         let refresh_url = format!("{}/token", ctx.config.base_url);
         drop(_guard);
         ctx.http.set_refresh_url(&refresh_url);
+
+        // O token do .env é um *refresh token* (tipo apiws-refresh, ~1 ano de
+        // validade). O SINIR exige um *access token* (tipo apiws, ~8h) obtido
+        // via POST /token. Se não fizermos o refresh aqui, o refresh token é
+        // usado diretamente como access token e a API responde 401.
+        ctx.http.refresh_token().await?;
+
         let token = ctx.http.get_token().await?;
         info!("Token SINIR renovado com sucesso");
         Ok(token)
@@ -420,9 +427,7 @@ impl MtrAdapter for SinirAdapter {
     async fn autenticar_credenciais(
         &self,
         _ctx: &MtrCtx,
-        _cpf: &str,
-        _senha: &str,
-        _unidade: u32,
+        _params: &crate::openmtr::open_mtr_auth::AuthParams,
     ) -> Result<String, OpenMTRError> {
         Err(OpenMTRError::not_supported(
             "SINIR usa integration_token, não CPF/senha",

@@ -112,10 +112,13 @@ async fn main() {
         .parse()
         .expect("MTR_PE_UNITY numérico");
 
-    let token = OpenMtrAuthBuilder::default()
-        .base(System::MtrPe)
-        .credenciais(&cpf, &password, unity)
-        .cnpj(&cnpj)
+    let token = OpenMtrClassicAuth::new(System::MtrPe)
+        .params(AuthParams::CpfSenhaUnidade {
+            cpf: cpf.clone(),
+            senha: password.clone(),
+            unidade: unity,
+            cnpj: Some(cnpj.clone()),
+        })
         .timeout_secs(180)
         .build()
         .await

@@ -119,13 +119,14 @@ let mtr = OpenMtrClient::builder()
 ```rust
 use open_mtr_core::*;
 
-// 1. Autentica com CPF+senha+unidade+CNPJ
-let token = OpenMtrAuthBuilder::default()
-    .base(System::MtrPe)
-    .credenciais("07800211428", "NORLU", 3623)
-    .cnpj("15805619000140")
-    .build()
-    .await?;
+// 1. Autentica com CPF+senha+unidade+CNPJ via OpenMtrClassicAuth (retorna sempre o token)
+let params = AuthParams::CpfSenhaUnidade {
+    cpf: "07800211428".into(),
+    senha: "NORLU".into(),
+    unidade: 3623,
+    cnpj: Some("15805619000140".into()),
+};
+let token = OpenMtrClassicAuth::obter_token(System::MtrPe, &params).await?;
 
 // 2. Usa o token JWT obtido
 let mtr = OpenMtrClient::builder()
@@ -277,11 +278,16 @@ println!("{:?}", mtr.dados[0].residuos[0]);    // Residuo { codigo_ibama: "15010
 | `listar_tratamentos` | `Resposta<TratamentoResiduo>` | Tipos de tratamento |
 | `listar_unidades` | `Resposta<UnidadeMedida>` | Unidades de medida |
 
-### Autenticação Legado (CPF + senha)
+### Autenticação Clássica (CPF + senha)
 
 | Método | Descrição |
 |---|---|
-| `OpenMtrAuthBuilder::default().credenciais(cpf, senha, unidade).cnpj(cnpj).build()` | Para sistemas que exigem CPF+senha (ex: MTR-PE) |
+| `OpenMtrClassicAuth::obter_token(system, &AuthParams).await` | Retorna **sempre o token JWT** para sistemas que exigem CPF+senha (ex: MTR-PE, SIGOR) |
+| `OpenMtrClassicAuth::new(system).params(params).build().await` | Builder equivalente, com `build_with_transport()` para WASM/Deno |
+| `OpenMtrWasm::obter_token(system, params_json)` (WASM/Deno SSR) | Obtém o token sem cliente instanciado |
+
+`AuthParams` (enum tipado, serializa como JSON):
+- `CpfSenhaUnidade { cpf, senha, unidade, cnpj }` — MTR-PE exige `cnpj`; SIGOR ignora.
 
 > MTR-PE requer CPF, senha, código da unidade **e** CNPJ da empresa.
 > O token retornado deve ser passado via `.token()` ao `OpenMtrClient::builder()`.<br>
@@ -300,7 +306,7 @@ pub(crate) trait MtrAdapter: Send + Sync {
     fn nome(&self) -> &'static str;
 
     async fn autenticar_token(&self, ctx: &MtrCtx) -> Result<String, OpenMTRError>;
-    async fn autenticar_credenciais(&self, ctx: &MtrCtx, ...) -> Result<String, OpenMTRError>;
+    async fn autenticar_credenciais(&self, ctx: &MtrCtx, params: &AuthParams) -> Result<String, OpenMTRError>;
 
     async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError>;
     async fn criar_mtrs(&self, ctx: &MtrCtx, mtrs: Vec<CriarMtr>) -> Result<LoteResult<MtrCriado>, OpenMTRError>;

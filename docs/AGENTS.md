@@ -67,7 +67,7 @@ open-mtr-core (lib)
 │   ├── system.rs             # enum System + adapter()
 │   ├── time_util.rs          # ★ NOVO: utc_now() polyfill WASM
 │   ├── open_mtr_client.rs    # OpenMtrClient + Builder (21 métodos)
-│   ├── open_mtr_auth.rs      # OpenMtrAuth (legado CPF+senha)
+│   ├── open_mtr_auth.rs      # OpenMtrClassicAuth (CPF+senha → token) + AuthParams
 │   └── prelude.rs            # re-exports públicos
 
 open-mtr-napi (cdylib)         # Node.js N-API
@@ -142,7 +142,7 @@ pub trait MtrAdapter: Send + Sync {
     fn nome(&self) -> &'static str;
 
     async fn autenticar_token(&self, ctx: &MtrCtx) -> Result<String, OpenMTRError>;
-    async fn autenticar_credenciais(&self, ctx: &MtrCtx, ...) -> Result<String, OpenMTRError>;
+    async fn autenticar_credenciais(&self, ctx: &MtrCtx, params: &AuthParams) -> Result<String, OpenMTRError>;
 
     async fn consultar_mtrs(&self, ctx: &MtrCtx, filtro: &FiltroMtr) -> Result<LoteResult<Mtr>, OpenMTRError>;
     async fn criar_mtrs(&self, ctx: &MtrCtx, mtrs: Vec<CriarMtr>) -> Result<LoteResult<MtrCriado>, OpenMTRError>;

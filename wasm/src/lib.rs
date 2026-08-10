@@ -89,6 +89,41 @@ impl OpenMtrWasm {
         Ok(r#"{"ok":true,"mensagem":"inicializado"}"#.into())
     }
 
+    /// Obtém o token de autenticação clássica (CPF + senha) para sistemas que
+    /// o exigem (ex.: MTR-PE, SIGOR), **sem** depender de um cliente
+    /// instanciado. Ideal para servidores Deno/SSR que precisam gerar o token
+    /// e então chamar `init(system, token, "")`.
+    ///
+    /// `params_json`: `{"tipo":"cpf_senha_unidade","cpf":"...","senha":"...","unidade":123,"cnpj":"..."}`
+    ///
+    /// Retorna `{"ok":true,"token":"..."}` ou `{"ok":false,"mensagem":"..."}`.
+    pub async fn obter_token(
+        &self,
+        system: String,
+        params_json: &str,
+    ) -> Result<String, JsError> {
+        let system: System = system.parse()
+            .map_err(|_| JsError::new(&format!("sistema inválido: {system}")))?;
+
+        let params: open_mtr_core::openmtr::open_mtr_auth::AuthParams =
+            serde_json::from_str(params_json)
+                .map_err(|e| JsError::new(&format!("params_json inválido: {e}")))?;
+
+        let auth = open_mtr_core::openmtr::open_mtr_auth::OpenMtrClassicAuth::new(system)
+            .params(params)
+            .timeout_secs(120);
+
+        let token = auth
+            .build_with_transport(JsFetchTransport::new())
+            .await
+            .map_err(|e| JsError::new(&format!("{} — {}", e.title, e.detail)))?;
+
+        Ok(serde_json::to_string(&serde_json::json!({
+            "ok": true,
+            "token": token,
+        })).unwrap_or_default())
+    }
+
     fn client(&self) -> Result<std::cell::Ref<'_, open_mtr_core::OpenMtrClient>, JsError> {
         let borrowed = self.client.borrow();
         if borrowed.is_none() {

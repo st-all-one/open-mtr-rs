@@ -238,18 +238,26 @@ impl MtrAdapter for MtrPeAdapter {
     async fn autenticar_credenciais(
         &self,
         ctx: &MtrCtx,
-        cpf: &str,
-        senha: &str,
-        unidade: u32,
+        params: &crate::openmtr::open_mtr_auth::AuthParams,
     ) -> Result<String, OpenMTRError> {
         let _span = info_span!("mtr_pe.autenticar_credenciais");
 
-        let cnpj = ctx
-            .config
-            .cnpj
-            .as_deref()
-            .or(ctx.config.integration_token.as_deref())
-            .unwrap_or("");
+        #[allow(unreachable_patterns)] // defensivo: enum #[non_exhaustive]
+        let (cpf, senha, unidade, cnpj) = match params {
+            crate::openmtr::open_mtr_auth::AuthParams::CpfSenhaUnidade { cpf, senha, unidade, cnpj } => {
+                (cpf.clone(), senha.clone(), *unidade, cnpj.clone())
+            }
+            _ => {
+                return Err(OpenMTRError::validation(
+                    "MTR-PE exige AuthParams::CpfSenhaUnidade",
+                ));
+            }
+        };
+
+        let cnpj = cnpj
+            .or_else(|| ctx.config.cnpj.clone())
+            .or_else(|| ctx.config.integration_token.clone())
+            .unwrap_or_default();
 
         let body = json!({
             "pessoaCodigo": unidade,
