@@ -226,6 +226,7 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
 
     open_mtr_core::Mtr {
         numero: v["manifestoCodigo"].as_i64().map(|n| n.to_string()).unwrap_or_default(),
+        barcode: String::new(),
         status,
         gerador: Some(parte(
             &v["cnpGerador"],

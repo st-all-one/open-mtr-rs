@@ -66,6 +66,11 @@ impl<'de> Deserialize<'de> for Periodo {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Mtr {
     pub numero: String,
+    /// Código de barras completo do manifesto, quando o sistema o fornece
+    /// (ex.: MTR-PE). Fica vazio em sistemas que não expõem esse código
+    /// (ex.: SINIR, SIGOR).
+    #[serde(default)]
+    pub barcode: String,
     pub status: StatusMtr,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gerador: Option<Parte>,

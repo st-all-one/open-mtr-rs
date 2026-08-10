@@ -157,6 +157,7 @@ fn json_para_mtr(v: &Value) -> Mtr {
 
     Mtr {
         numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        barcode: String::new(),
         status: map_status_sigor(status_str),
         gerador: v.get("parceiroGerador").map(json_para_parte_sigor),
         transportador: v.get("parceiroTransportador").map(json_para_parte_sigor),

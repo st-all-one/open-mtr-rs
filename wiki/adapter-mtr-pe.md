@@ -73,11 +73,14 @@ O adapter normaliza para `Parte { documento, unidade }`. MTR-PE não devolve `ra
 
 ## Enriquecimento do Modelo
 
-O adapter preenche 10 dos 18 campos do `Mtr` unificado:
+O adapter preenche 14 dos 19 campos do `Mtr` unificado (o novo campo `barcode` é
+preenchido apenas quando a API fornece o código — sistemas como SINIR/SIGOR o
+deixam vazio):
 
 | Campo | Preenchido | Fonte |
 |-------|-----------|-------|
 | `numero` | ✅ | `manifestoCodigo` (i64 → string) |
+| `barcode` | ✅ | Código de barras completo (34 dígitos) usado na consulta/download |
 | `status` | ✅ | `situacaoManifestoCodigo` (1/3/4/9) |
 | `gerador` | ✅ | `cnpGerador` + `codUnidadeGerador` |
 | `transportador` | ✅ | `cnpTransportador` + `codUnidadeTransportador` |
@@ -118,6 +121,37 @@ O adapter preenche 10 dos 18 campos do `Mtr` unificado:
 | Listar barcodes | `POST /retornaListaCodigoBarasManifesto/{ini}/{fim}` | Direto |
 | Download MTR PDF | `POST /buscaPdfManifestoPorCodigoBarras/{barcode}` | Binário |
 | Download CDF PDF | `POST /buscaPdfCdf/{codigo}` | Binário |
+
+## Consulta por período (`consultar_mtrs` com `periodo`)
+
+O MTR-PE **não** possui listagem estruturada de manifestos. O endpoint
+`retornaListaCodigoBarasManifesto` devolve apenas códigos de barras, com janela
+máxima de 30 dias. O método genérico `consultar_mtrs` implementa essa lógica:
+
+1. Percorre o período em janelas de 30 dias chamando `retornaListaCodigoBarasManifesto/{ini}/{fim}`;
+2. Deduplica os códigos de barras coletados;
+3. Busca o detalhe de cada um via `retornaManifesto/{barcode}`, em paralelo
+   (concorrência limitada a 10 requisições);
+4. Devolve o `LoteResult<Mtr>` com `total` = quantidade de barcodes únicos.
+
+Cada `Mtr` retornado traz o campo `barcode` preenchido com o código de barras
+completo (34 dígitos), pronto para consultas futuras e download do PDF.
+
+Filtro por `numeros` continua suportado (consulta direta por barcode/número).
+
+## Download de PDFs (`download_mtrs`)
+
+O download do PDF usa `POST /buscaPdfManifestoPorCodigoBarras/{barcode}` — exige
+o **barcode completo** (34 dígitos), não o `manifestoCodigo` curto. Como o campo
+`barcode` fica fixado no `Mtr`, basta:
+
+```rust
+let nums: Vec<String> = mtrs.iter().map(|m| m.barcode.clone()).collect();
+let resp = client.download_mtrs(nums).await?;
+```
+
+Exemplos completos: `core/examples/indexar_mtr_pe.rs` (gera o índice JSON com
+barcodes) e `core/examples/baixar_mtr_pe_pdfs.rs` (baixa os PDFs em `mtrs/pe/`).
 
 ## Exemplo de Uso
 

@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use serde_json::{json, Value};
 use tracing::{info, info_span, warn};
 
@@ -10,7 +11,7 @@ use crate::openmtr::domain::{
     AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
     ClasseResiduo, Cnpj, CpfCnpj, CriarMtr, DownloadCdf, DownloadItem, EstadoFisico, FiltroCdf,
     FiltroMtr, GerarCdf, ModificacaoTipo, ModificarMtr, Mtr, MtrCancelado, MtrCriado,
-    MtrModificado, MtrRecebido, Parte, ReceberMtr, Residuo, ResiduoIbama, StatusMtr,
+    MtrModificado, MtrRecebido, Parte, Periodo, ReceberMtr, Residuo, ResiduoIbama, StatusMtr,
     TratamentoResiduo, UnidadeMedida,
 };
 use crate::openmtr::error::OpenMTRError;
@@ -121,7 +122,7 @@ fn json_para_residuo_item(v: &Value) -> Residuo {
     }
 }
 
-fn json_para_mtr(v: &Value) -> Mtr {
+fn json_para_mtr(v: &Value, barcode: &str) -> Mtr {
     let situacao = v.get("situacaoManifestoCodigo").and_then(serde_json::Value::as_i64);
 
     let residuos: Vec<Residuo> = v
@@ -132,6 +133,7 @@ fn json_para_mtr(v: &Value) -> Mtr {
 
     Mtr {
         numero: v.get("manifestoCodigo").and_then(serde_json::Value::as_i64).map(|n| n.to_string()).unwrap_or_default(),
+        barcode: barcode.to_string(),
         status: map_status_pe(situacao),
         gerador: Some(cnpj_para_parte(
             &v["cnpGerador"],
@@ -282,7 +284,7 @@ impl MtrAdapter for MtrPeAdapter {
                     match ctx.http.post::<Value, _>(&path, &json!({}), "consultar_mtr").await {
                         Ok(resp) => {
                             if retorno_eh_sucesso(&resp) {
-                                itens.push(ItemResult::Ok(json_para_mtr(&resp)));
+                                itens.push(ItemResult::Ok(json_para_mtr(&resp, numero)));
                             } else {
                                 let msg = resp.get("retorno").and_then(|s| s.as_str()).unwrap_or("Erro");
                                 itens.push(ItemResult::Erro {
@@ -302,8 +304,16 @@ impl MtrAdapter for MtrPeAdapter {
                 return Ok(LoteResult::new(itens));
             }
 
-        Err(OpenMTRError::not_supported(
-            "MTR-PE: consulta por período usa retornaListaCodigoBarasManifesto (apenas códigos de barras)",
+        // Consulta por período: o MTR-PE não lista manifestos estruturados —
+        // retornaListaCodigoBarasManifesto devolve apenas códigos de barras
+        // (janela máxima de 30 dias). O helper coleta os barcodes e busca o
+        // detalhe de cada um via /retornaManifesto/{barcode}.
+        if let Some(ref periodo) = filtro.periodo {
+            return self.consultar_mtrs_por_periodo(ctx, periodo).await;
+        }
+
+        Err(OpenMTRError::validation(
+            "MTR-PE: informe 'numeros' ou 'periodo' no FiltroMtr",
         ))
     }
 
@@ -791,5 +801,95 @@ impl MtrAdapter for MtrPeAdapter {
         let response: Value = ctx.http.post("/retornaListaUnidade", &json!({}), "listar_unidades").await?;
         let items = response.as_array().cloned().unwrap_or_default();
         Ok(LoteResult::from_vec(items.iter().map(json_para_unidade).collect()))
+    }
+}
+
+impl MtrPeAdapter {
+    /// Lista MTRs por período no MTR-PE.
+    ///
+    /// A API estadual não tem listagem estruturada — `retornaListaCodigoBarasManifesto`
+    /// devolve apenas códigos de barras (janela máxima de 30 dias). Este método
+    /// percorre o período em janelas de 30 dias, deduplica os barcodes e consulta
+    /// o detalhe de cada manifesto em paralelo (concorrência limitada).
+    async fn consultar_mtrs_por_periodo(
+        &self,
+        ctx: &MtrCtx,
+        periodo: &Periodo,
+    ) -> Result<LoteResult<Mtr>, OpenMTRError> {
+        const JANELA_DIAS: i64 = 30;
+        const CONCORRENCIA: usize = 10;
+
+        let inicio = periodo.inicio.0;
+        let fim = periodo.fim.0;
+
+        // 1. Coleta barcodes em janelas de 30 dias
+        let mut barcodes: Vec<String> = Vec::new();
+        let mut atual = inicio;
+        while atual <= fim {
+            let janela_fim = (atual + chrono::Duration::days(JANELA_DIAS - 1)).min(fim);
+            let path = format!(
+                "/retornaListaCodigoBarasManifesto/{}/{}",
+                atual.format("%Y%m%d"),
+                janela_fim.format("%Y%m%d")
+            );
+            let resp: Value = ctx.http.post(&path, &json!({}), "listar_barcodes").await?;
+            if let Some(codigos) = resp.get("codigos").and_then(Value::as_array) {
+                barcodes.extend(codigos.iter().filter_map(|c| c.as_str().map(String::from)));
+            }
+            atual = janela_fim + chrono::Duration::days(1);
+        }
+
+        barcodes.sort();
+        barcodes.dedup();
+
+        if barcodes.is_empty() {
+            info!(
+                inicio = %inicio,
+                fim = %fim,
+                "Nenhum código de barras no período"
+            );
+            return Ok(LoteResult::new(Vec::new()));
+        }
+
+        let total = i64::try_from(barcodes.len()).unwrap_or(i64::MAX);
+
+        // 2. Busca o detalhe de cada barcode (concorrência limitada)
+        let tasks = barcodes.into_iter().enumerate().map(|(indice, barcode)| {
+            async move {
+                let path = format!("/retornaManifesto/{barcode}");
+                match ctx.http.post::<Value, _>(&path, &json!({}), "consultar_mtr").await {
+                    Ok(resp) => {
+                        if retorno_eh_sucesso(&resp) {
+                            ItemResult::Ok(json_para_mtr(&resp, &barcode))
+                        } else {
+                            let msg = resp.get("retorno").and_then(|s| s.as_str()).unwrap_or("Erro");
+                            ItemResult::Erro {
+                                indice,
+                                problema: OpenMTRError::not_found(msg),
+                            }
+                        }
+                    }
+                    Err(e) => ItemResult::Erro {
+                        indice,
+                        problema: OpenMTRError::api_error(502, e.to_string()),
+                    },
+                }
+            }
+        });
+
+        let itens: Vec<_> = stream::iter(tasks)
+            .buffer_unordered(CONCORRENCIA)
+            .collect()
+            .await;
+
+        info!(
+            total = %total,
+            sucessos = %itens.iter().filter(|i| matches!(i, ItemResult::Ok(_))).count(),
+            "MTRs consultados por período via códigos de barras"
+        );
+
+        let mut lote = LoteResult::new(itens);
+        lote.total = Some(total);
+        Ok(lote)
     }
 }

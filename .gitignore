@@ -28,3 +28,7 @@ dist/
 .env
 *.env.local
 conversations
+
+# Dados derivados (índices e downloads)
+indice_mtr_pe.json
+/mtrs/
