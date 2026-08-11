@@ -67,8 +67,8 @@ export interface InitOutput {
     readonly openmtrwasm_new: () => number;
     readonly openmtrwasm_obter_token: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly openmtrwasm_receber_mtrs: (a: number, b: number, c: number) => number;
-    readonly __wasm_bindgen_func_elem_653: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_961: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_663: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_960: (a: number, b: number, c: number, d: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;
