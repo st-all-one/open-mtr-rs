@@ -10,7 +10,7 @@
 //!   cargo run -p open-mtr-core --example indexar_mtr_pe -- --inicio 2026-01-01 --fim 2026-08-10 --saida indice.json
 //!
 //! Requer o .env na raiz do projeto com:
-//!   MTR_PE_CNPJ, MTR_PE_CPF_USER, MTR_PE_PASSWORD, MTR_PE_UNITY
+//!   MTR_PE_CNPJ, MTR_PE_CPF, MTR_PE_PASSWORD, MTR_PE_UNITY
 
 #![allow(clippy::unwrap_used, clippy::pedantic)]
 
@@ -121,7 +121,7 @@ async fn main() {
     println!("{}", "=".repeat(70));
 
     let cnpj = env("MTR_PE_CNPJ").expect("MTR_PE_CNPJ no .env");
-    let cpf = env("MTR_PE_CPF_USER").expect("MTR_PE_CPF_USER no .env");
+    let cpf = env("MTR_PE_CPF").expect("MTR_PE_CPF no .env");
     let password = env("MTR_PE_PASSWORD").expect("MTR_PE_PASSWORD no .env");
     let unity: u32 = env("MTR_PE_UNITY")
         .expect("MTR_PE_UNITY no .env")
