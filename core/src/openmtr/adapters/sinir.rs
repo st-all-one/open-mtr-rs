@@ -182,9 +182,23 @@ fn json_para_mtr_detalhe(v: &Value) -> Mtr {
         destinador: v.get("parceiroDestinador").map(json_para_parte),
         residuos,
         data_criacao,
-        data_recebimento: v.get("dataRecebimentoAT").and_then(|s| s.as_str()).and_then(|s| {
-            if s.is_empty() { None } else { chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok() }
-        }),
+        data_recebimento: v
+            .get("dataRecebimentoAT")
+            .and_then(|s| s.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                // Recebimento efetivo do manifestos vem em situacaoManifesto.simDataRecebimento
+                v.get("situacaoManifesto")
+                    .and_then(|s| s.get("simDataRecebimento"))
+                    .and_then(|s| s.as_str())
+            })
+            .and_then(|s| {
+                if s.is_empty() {
+                    None
+                } else {
+                    chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok()
+                }
+            }),
         observacao: v.get("manObservacao").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         motorista: v.get("manNomeMotorista").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         placa: v.get("manPlacaVeiculo").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),

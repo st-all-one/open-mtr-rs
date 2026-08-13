@@ -157,7 +157,7 @@ pub struct Mtr {
     pub codigo_estadual: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 #[derive(Default)]
 pub enum StatusMtr {
@@ -168,6 +168,15 @@ pub enum StatusMtr {
     Cancelado,
     Expirado,
     Outro(String),
+}
+
+impl serde::Serialize for StatusMtr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
 }
 
 
@@ -300,5 +309,28 @@ mod tests {
             .expect("filtro com dias");
         assert!(f.periodo.is_some());
         assert_eq!(f.tamanho, Some(5));
+    }
+
+    #[test]
+    fn test_status_mtr_serializa_como_string() {
+        let status = StatusMtr::Outro("Cancelado Automático por prazo".into());
+        let json = serde_json::to_string(&status).expect("serialize");
+        assert_eq!(json, r#""Cancelado Automático por prazo""#);
+        assert!(!json.contains("Outro"), "não pode serializar como objeto");
+    }
+
+    #[test]
+    fn test_status_mtr_variantes_serializam_string() {
+        for (status, esperado) in [
+            (StatusMtr::Ativo, "Ativo"),
+            (StatusMtr::EmTransporte, "Em Transporte"),
+            (StatusMtr::Recebido, "Recebido"),
+            (StatusMtr::Cancelado, "Cancelado"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&status).expect("serialize"),
+                format!(r#""{esperado}""#)
+            );
+        }
     }
 }
