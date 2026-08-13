@@ -55,9 +55,25 @@ fn filtro_para_json(filtro: &FiltroMtr) -> Value {
         "dataInicial": data_inicial,
         "dataFinal": data_final,
         "tipoParceiro": tipo_parceiro,
-        "pagina": filtro.pagina,
-        "tamanhoPagina": filtro.tamanho,
     })
+}
+
+/// SINIR pagination is driven by query parameters, not body fields.
+///
+/// The `/listaManifesto` endpoint (Spring Data style) exposes `?page={offset}&size={n}`.
+/// Empirically, `page` behaves as the **record offset** (not a 1-based page index):
+/// `page=1&size=10` returns records 1..11, `page=50&size=50` returns 50..100, etc.
+///
+/// This helper maps the high-level `FiltroMtr` (`pagina` = 1-based page, `tamanho` = page size)
+/// to query params: `page = (pagina - 1) * tamanho` e `size = tamanho`.
+/// If no page size is informed, no query params are sent (SINIR defaults `page=0&size=10`).
+fn lista_manifesto_path(filtro: &FiltroMtr) -> String {
+    let Some(size) = filtro.tamanho else {
+        return "/listaManifesto".to_string();
+    };
+    let page = filtro.pagina.unwrap_or(1).saturating_sub(1);
+    let offset = page.saturating_mul(size);
+    format!("/listaManifesto?page={offset}&size={size}")
 }
 
 fn json_para_parte(v: &Value) -> Parte {
@@ -447,9 +463,10 @@ impl MtrAdapter for SinirAdapter {
                 return self.consultar_mtrs_por_numeros(ctx, nums).await;
             }
 
-        // Caso contrário, busca por período + tipo de parceiro
+        // Caso contrário, busca por período + tipo de parceiro (paginação via query string)
         let body = filtro_para_json(filtro);
-        let response: Value = ctx.http.post("/listaManifesto", &body, "consultar_mtrs").await?;
+        let path = lista_manifesto_path(filtro);
+        let response: Value = ctx.http.post(&path, &body, "consultar_mtrs").await?;
 
         if tem_erro(&response) {
             warn!(
@@ -1114,5 +1131,58 @@ impl SinirAdapter {
             "MTRs consultados por número"
         );
         Ok(LoteResult::new(itens))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_sem_tamanho_nao_pagina() {
+        let filtro = FiltroMtr::default();
+        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto");
+    }
+
+    #[test]
+    fn path_pagina_1_mapeia_offset_0() {
+        let filtro = FiltroMtr {
+            pagina: Some(1),
+            tamanho: Some(50),
+            ..FiltroMtr::default()
+        };
+        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto?page=0&size=50");
+    }
+
+    #[test]
+    fn path_pagina_3_mapeia_offset_2x_tamanho() {
+        let filtro = FiltroMtr {
+            pagina: Some(3),
+            tamanho: Some(50),
+            ..FiltroMtr::default()
+        };
+        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto?page=100&size=50");
+    }
+
+    #[test]
+    fn path_sem_pagina_usando_tamanho() {
+        let filtro = FiltroMtr {
+            tamanho: Some(10),
+            ..FiltroMtr::default()
+        };
+        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto?page=0&size=10");
+    }
+
+    #[test]
+    fn body_nao_contem_paginacao() {
+        let filtro = FiltroMtr {
+            pagina: Some(2),
+            tamanho: Some(50),
+            ..FiltroMtr::default()
+        };
+        let body = filtro_para_json(&filtro);
+        assert!(body.get("pagina").is_none(), "pagina não deve ir no body");
+        assert!(body.get("tamanhoPagina").is_none(), "tamanhoPagina não deve ir no body");
+        assert_eq!(body.get("tipoParceiro").and_then(serde_json::Value::as_i64), Some(8));
     }
 }
