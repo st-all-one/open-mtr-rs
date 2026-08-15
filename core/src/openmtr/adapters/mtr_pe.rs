@@ -102,6 +102,19 @@ fn parse_data_yyyymmdd(v: &Value) -> Option<chrono::NaiveDate> {
 }
 
 fn json_para_residuo_item(v: &Value) -> Residuo {
+    // A quantidade recebida pode vir direto no item (`quantidadeRecebida`) ou
+    // aninhada em `itemManifestoRecebimentoJSONs` (primeiro registro, campo
+    // `qtdRecebida`), como no fluxo de recebimento.
+    let quantidade_recebida = v
+        .get("quantidadeRecebida")
+        .and_then(serde_json::Value::as_f64)
+        .or_else(|| {
+            v.get("itemManifestoRecebimentoJSONs")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|r| r.get("qtdRecebida"))
+                .and_then(serde_json::Value::as_f64)
+        });
     Residuo {
         codigo_ibama: v.get("residuo").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
         descricao: None,
@@ -111,7 +124,7 @@ fn json_para_residuo_item(v: &Value) -> Residuo {
         classe: v.get("codigoClasse").and_then(serde_json::Value::as_i64).map(|n| n as u32),
         acondicionamento: v.get("codigoAcondicionamento").and_then(serde_json::Value::as_i64).map(|n| n as u32),
         tratamento: v.get("codigoTecnologia").and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        quantidade_recebida: None,
+        quantidade_recebida,
         densidade: None,
         numero_onu: None,
         classe_risco: None,
