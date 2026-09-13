@@ -13,12 +13,20 @@ fn load_env() {
 
 fn has_live_token() -> bool {
     load_env();
-    std::env::var("OPENMTR_SINIR_TOKEN").is_ok()
+    std::env::var("SINIR_REFRESH_TOKEN").is_ok()
 }
 
 fn live_token() -> String {
     load_env();
-    std::env::var("OPENMTR_SINIR_TOKEN").expect("OPENMTR_SINIR_TOKEN not set")
+    std::env::var("SINIR_REFRESH_TOKEN").expect("SINIR_REFRESH_TOKEN not set")
+}
+
+/// Recebimento é uma operação **destrutiva** (consome um MTR real). Só roda
+/// quando explicitamente habilitado, além do token.
+fn live_receive_enabled() -> bool {
+    load_env();
+    std::env::var("OPENMTR_SINIR_LIVE_RECEIVE")
+        .is_ok_and(|v| matches!(v.trim(), "1" | "true" | "yes"))
 }
 
 fn test_timeout() -> u64 {
@@ -78,7 +86,7 @@ async fn test_live_consultar_ultimos_30_dias() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -112,7 +120,7 @@ async fn test_live_consultar_por_periodo() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -157,7 +165,7 @@ async fn test_live_consultar_sem_filtro() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -180,7 +188,7 @@ async fn test_live_listar_residuos() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -205,7 +213,7 @@ async fn test_live_listar_acondicionamentos() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -229,7 +237,7 @@ async fn test_live_listar_classes() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -250,7 +258,7 @@ async fn test_live_listar_estados_fisicos() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -271,7 +279,7 @@ async fn test_live_listar_tratamentos() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -292,7 +300,7 @@ async fn test_live_listar_unidades() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -340,7 +348,7 @@ async fn test_live_consultar_mtr_especifico() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -386,7 +394,7 @@ async fn test_live_download_mtr_existente() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -431,7 +439,7 @@ async fn test_live_consultar_mtr_261032125684() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -556,7 +564,7 @@ async fn test_live_consultar_detalhado() {
     let client = match create_live_client().await {
         Some(c) => c,
         None => {
-            eprintln!("SKIP: OPENMTR_SINIR_TOKEN not set");
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
             return;
         }
     };
@@ -596,5 +604,125 @@ async fn test_live_consultar_detalhado() {
             eprintln!("⚠️  Consulta detalhada falhou: {e}");
         }
     }
+}
+
+// ─── Recebimento (DESTRUTIVO — gated por OPENMTR_SINIR_LIVE_RECEIVE) ────────
+
+/// Recebe um MTR real elegível e reconfirma por consulta.
+///
+/// **Consome um MTR de verdade** (muda o status para `Recebido`), por isso só
+/// roda com `SINIR_REFRESH_TOKEN` **e** `OPENMTR_SINIR_LIVE_RECEIVE=1`.
+/// O responsável pode ser ajustado via `OPENMTR_SINIR_RESPONSAVEL`.
+#[tokio::test]
+async fn test_live_receber_mtr() {
+    let client = match create_live_client().await {
+        Some(c) => c,
+        None => {
+            eprintln!("SKIP: SINIR_REFRESH_TOKEN not set");
+            return;
+        }
+    };
+    if !live_receive_enabled() {
+        eprintln!("SKIP: OPENMTR_SINIR_LIVE_RECEIVE não habilitado (teste destrutivo)");
+        return;
+    }
+
+    let responsavel = std::env::var("OPENMTR_SINIR_RESPONSAVEL")
+        .unwrap_or_else(|_| "Norlu Apoio".to_string());
+
+    // 1. Descobre um MTR Ativo com resíduos (conta = destinador).
+    let filtro = FiltroMtr {
+        periodo: Some(Periodo::ultimos_dias(30)),
+        parte: Some(FiltroParte {
+            tipo: TipoParte::Destinador,
+            ..Default::default()
+        }),
+        tamanho: Some(10),
+        detalhado: true,
+        ..Default::default()
+    };
+    let lista = client.consultar_mtrs(&filtro).await.expect("consulta");
+    let candidato = lista.dados.iter().find(|m| {
+        matches!(m.status, StatusMtr::Ativo)
+            && !m.residuos.is_empty()
+            && m.motorista.is_some()
+            && m.placa.is_some()
+    });
+    let Some(mtr) = candidato else {
+        eprintln!("SKIP: nenhum MTR Ativo elegível encontrado nos últimos 30 dias");
+        return;
+    };
+
+    // 2. Monta o recebimento a partir do próprio manifesto.
+    let residuos: Vec<ResiduoRecebido> = mtr
+        .residuos
+        .iter()
+        .map(|r| ResiduoRecebido {
+            codigo_ibama: r.codigo_ibama.clone(),
+            quantidade_recebida: r.quantidade,
+            unidade: r.unidade.unwrap_or(3),
+            estado_fisico: r.estado_fisico,
+            classe: r.classe,
+            acondicionamento: r.acondicionamento,
+            tratamento: r.tratamento,
+            codigo_ibama_novo: None,
+            tratamento_novo: None,
+            classe_nova: None,
+            densidade: r.densidade,
+            quantidade: Some(r.quantidade),
+            justificativa: None,
+            numero_onu: r.numero_onu.clone(),
+            classe_risco: r.classe_risco.clone(),
+            nome_embarque: r.nome_embarque.clone(),
+            grupo_embalagem: r.grupo_embalagem,
+        })
+        .collect();
+
+    let receber = ReceberMtr {
+        numero: mtr.numero.clone(),
+        data_recebimento: chrono::Utc::now().naive_utc(),
+        responsavel,
+        observacoes: Some("Recebimento automático (teste live open-mtr-rs)".to_string()),
+        motorista: mtr.motorista.clone(),
+        placa_veiculo: mtr.placa.clone(),
+        residuos_recebidos: residuos,
+    };
+
+    // 3. Recebe em lote.
+    let resp = client
+        .receber_mtrs(vec![receber])
+        .await
+        .expect("receber_mtrs");
+    println!(
+        "MTR {} → ok={} dados={} erros={}",
+        mtr.numero,
+        resp.ok,
+        resp.dados.len(),
+        resp.erros.len()
+    );
+    assert!(resp.ok, "recebimento retornou erro");
+    assert!(
+        resp.erros.is_empty(),
+        "erros no recebimento: {:?}",
+        resp.erros.iter().map(|e| e.detail.clone()).collect::<Vec<_>>()
+    );
+    assert_eq!(resp.dados.len(), 1);
+    assert!(resp.dados[0].recebido, "restResponseValido=false");
+
+    // 4. Reconfirma por consulta.
+    let ver = client
+        .consultar_mtrs(&FiltroMtr {
+            numeros: Some(vec![mtr.numero.clone()]),
+            ..Default::default()
+        })
+        .await
+        .expect("consulta pós-recebimento");
+    assert!(
+        ver.dados
+            .iter()
+            .any(|m| m.numero == mtr.numero && matches!(m.status, StatusMtr::Recebido)),
+        "MTR {} não consta como Recebido após o recebimento",
+        mtr.numero
+    );
 }
 
