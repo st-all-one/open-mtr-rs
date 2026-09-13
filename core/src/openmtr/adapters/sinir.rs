@@ -58,6 +58,20 @@ fn filtro_para_json(filtro: &FiltroMtr) -> Value {
     })
 }
 
+/// SINIR rejeita (HTTP 400) períodos de pesquisa superiores a 30 dias.
+fn validar_periodo(filtro: &FiltroMtr) -> Result<(), OpenMTRError> {
+    let Some(periodo) = &filtro.periodo else {
+        return Ok(());
+    };
+    let dias = (periodo.fim.0 - periodo.inicio.0).num_days();
+    if dias > 30 {
+        return Err(OpenMTRError::validation(format!(
+            "o período de pesquisa do SINIR não pode ser superior a 30 dias (informado: {dias} dias)"
+        )));
+    }
+    Ok(())
+}
+
 /// SINIR pagination is driven by query parameters, not body fields.
 ///
 /// The `/listaManifesto` endpoint (Spring Data style) exposes `?page={offset}&size={n}`.
@@ -322,39 +336,172 @@ fn json_para_mtr_criado(v: &Value) -> MtrCriado {
 }
 
 fn residuo_recebido_para_json(r: &ResiduoRecebido) -> Value {
-    json!({
+    let mut item = json!({
         "resCodigoIbama": r.codigo_ibama,
-        "quantidadeRecebida": r.quantidade_recebida,
+        "marQuantidade": r.quantidade_original(),
+        "marQuantidadeRecebida": r.quantidade_recebida,
         "uniCodigo": r.unidade,
-        "tieCodigo": r.estado_fisico,
-        "claCodigo": r.classe,
-        "tiaCodigo": r.acondicionamento,
-        "traCodigo": r.tratamento,
-        "marSequencial": Option::<i32>::None,
-    })
+    });
+    if let Some(v) = r.estado_fisico {
+        item["tieCodigo"] = json!(v);
+    }
+    if let Some(v) = r.classe {
+        item["claCodigo"] = json!(v);
+    }
+    if let Some(v) = r.acondicionamento {
+        item["tiaCodigo"] = json!(v);
+    }
+    if let Some(v) = r.tratamento {
+        item["traCodigo"] = json!(v);
+    }
+    if let Some(ref justificativa) = r.justificativa {
+        item["marJustificativa"] = json!(justificativa);
+    }
+    if let Some(ref novo) = r.codigo_ibama_novo {
+        item["resCodigoIbamaNovo"] = json!(novo);
+    }
+    if let Some(v) = r.tratamento_novo {
+        item["traCodigoNovo"] = json!(v);
+    }
+    if let Some(v) = r.classe_nova {
+        item["claCodigoNovo"] = json!(v);
+    }
+    if let Some(v) = r.densidade {
+        item["marDensidade"] = json!(v);
+    }
+    if let Some(ref v) = r.numero_onu {
+        item["marNumeroONU"] = json!(v);
+    }
+    if let Some(ref v) = r.classe_risco {
+        item["marClasseRisco"] = json!(v);
+    }
+    if let Some(ref v) = r.nome_embarque {
+        item["marNomeEmbarque"] = json!(v);
+    }
+    if let Some(v) = r.grupo_embalagem {
+        item["greCodigo"] = json!(v);
+    }
+    item
 }
 
 fn receber_mtr_para_json(receber: &ReceberMtr) -> Value {
-    let residuos = if receber.residuos_recebidos.is_empty() {
-        None
-    } else {
-        Some(receber.residuos_recebidos.iter().map(residuo_recebido_para_json).collect::<Vec<_>>())
-    };
-
     json!({
         "manNumero": receber.numero,
         "dataRecebimento": receber.data_recebimento.and_utc().timestamp_millis(),
-        "nomeResponsavel": receber.responsavel,
+        "nomeMotorista": receber.motorista,
+        "placaVeiculo": receber.placa_veiculo,
+        "nomeResponsavelRecebimento": receber.responsavel,
         "observacoes": receber.observacoes,
-        "listaResiduosRecebidos": residuos,
+        "listaManifestoResiduos": receber
+            .residuos_recebidos
+            .iter()
+            .map(residuo_recebido_para_json)
+            .collect::<Vec<_>>(),
     })
+}
+
+/// Regras mínimas do SINIR para um recebimento (antes de qualquer efeito externo).
+fn validar_recebimento(receber: &ReceberMtr) -> Result<(), String> {
+    if receber.numero.trim().is_empty() {
+        return Err("manNumero é obrigatório".into());
+    }
+    if receber.responsavel.trim().is_empty() {
+        return Err(
+            "nomeResponsavelRecebimento é obrigatório (responsável cadastrado no SINIR)".into(),
+        );
+    }
+    if receber.motorista.as_deref().is_none_or(|m| m.trim().is_empty()) {
+        return Err("nomeMotorista é obrigatório no recebimento SINIR".into());
+    }
+    if receber.placa_veiculo.as_deref().is_none_or(|p| p.trim().is_empty()) {
+        return Err("placaVeiculo é obrigatório no recebimento SINIR".into());
+    }
+    if receber.residuos_recebidos.is_empty() {
+        return Err("nenhum resíduo recebido informado".into());
+    }
+    for r in &receber.residuos_recebidos {
+        r.validar()?;
+    }
+    Ok(())
+}
+
+fn erros_para_todos(
+    lotes: &[ReceberMtr],
+    erro: impl Fn(&ReceberMtr) -> OpenMTRError,
+) -> Vec<ItemResult<MtrRecebido>> {
+    lotes
+        .iter()
+        .enumerate()
+        .map(|(indice, receber)| ItemResult::Erro {
+            indice,
+            problema: erro(receber),
+        })
+        .collect()
+}
+
+/// Erros por item quando a validação local barra o lote inteiro.
+fn itens_invalidos(
+    total: usize,
+    invalidos: &[(usize, String)],
+) -> Vec<ItemResult<MtrRecebido>> {
+    (0..total)
+        .map(|indice| {
+            let problema = invalidos
+                .iter()
+                .find(|(i, _)| *i == indice)
+                .map_or_else(
+                    || OpenMTRError::validation("lote não enviado: há itens inválidos"),
+                    |(_, msg)| OpenMTRError::validation(msg.clone()),
+                );
+            ItemResult::Erro { indice, problema }
+        })
+        .collect()
+}
+
+/// Converte `objetoResposta` em itens, correlacionando por `manNumero`
+/// (fallback: posição, quando o tamanho da resposta bate com o do pedido).
+fn mapear_recebidos(
+    lotes: &[ReceberMtr],
+    respostas: &[Value],
+) -> Vec<ItemResult<MtrRecebido>> {
+    let mut itens = Vec::with_capacity(lotes.len());
+    for (indice, receber) in lotes.iter().enumerate() {
+        let posicao = respostas
+            .iter()
+            .position(|v| {
+                v.get("manNumero").and_then(|s| s.as_str()) == Some(receber.numero.as_str())
+            })
+            .or_else(|| (respostas.len() == lotes.len()).then_some(indice));
+
+        match posicao.and_then(|p| respostas.get(p)) {
+            Some(dto) => {
+                let recebido = json_para_mtr_recebido(dto);
+                if recebido.recebido {
+                    itens.push(ItemResult::Ok(recebido));
+                } else {
+                    itens.push(ItemResult::Erro {
+                        indice,
+                        problema: OpenMTRError::validation(recebido.mensagem.unwrap_or_default()),
+                    });
+                }
+            }
+            None => itens.push(ItemResult::Erro {
+                indice,
+                problema: OpenMTRError::validation(format!(
+                    "sem retorno para o MTR {}",
+                    receber.numero
+                )),
+            }),
+        }
+    }
+    itens
 }
 
 fn json_para_mtr_recebido(v: &Value) -> MtrRecebido {
     MtrRecebido {
         numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        recebido: v.get("recebido").and_then(serde_json::Value::as_bool).unwrap_or(false),
-        mensagem: v.get("mensagem").and_then(|s| s.as_str()).map(String::from),
+        recebido: v.get("restResponseValido").and_then(serde_json::Value::as_bool).unwrap_or(false),
+        mensagem: v.get("restResponseMensagem").and_then(|s| s.as_str()).map(String::from),
     }
 }
 
@@ -424,6 +571,12 @@ fn tem_erro(v: &Value) -> bool {
     v.get("erro").and_then(serde_json::Value::as_bool).unwrap_or(false)
 }
 
+/// Adapter do SINIR Nacional.
+///
+/// Limitações conhecidas (ver `REFERENCIA-SINIR.md`):
+/// - `listar_classes_por_residuo` **não é suportado** no SINIR (HTTP 501);
+///   use `listar_classes` e associe localmente.
+/// - o período de consulta é limitado a **30 dias**.
 pub(crate) struct SinirAdapter;
 
 #[async_trait]
@@ -478,6 +631,7 @@ impl MtrAdapter for SinirAdapter {
             }
 
         // Caso contrário, busca por período + tipo de parceiro (paginação via query string)
+        validar_periodo(filtro)?;
         let body = filtro_para_json(filtro);
         let path = lista_manifesto_path(filtro);
         let response: Value = ctx.http.post(&path, &body, "consultar_mtrs").await?;
@@ -593,53 +747,57 @@ impl MtrAdapter for SinirAdapter {
     ) -> Result<LoteResult<MtrRecebido>, OpenMTRError> {
         let _span = info_span!("sinir.receber_mtrs");
 
-        let mut itens = Vec::with_capacity(lotes.len());
-
-        for (indice, receber) in lotes.into_iter().enumerate() {
-            let body = receber_mtr_para_json(&receber);
-            match ctx
-                .http
-                .post::<Value, _>("/receberManifestoLote", &body, "receber_mtr")
-                .await
-            {
-                Ok(resp) => {
-                    let some_items = resp.get("objeto")
-                        .and_then(|a| a.as_array())
-                        .cloned()
-                        .unwrap_or_default();
-
-                    if some_items.is_empty() {
-                        itens.push(ItemResult::Erro {
-                            indice,
-                            problema: OpenMTRError::validation("Nenhum retorno no recebimento"),
-                        });
-                        continue;
-                    }
-
-                    for item in &some_items {
-                        let recebido = json_para_mtr_recebido(item);
-                        if recebido.recebido {
-                            itens.push(ItemResult::Ok(recebido));
-                        } else {
-                            itens.push(ItemResult::Erro {
-                                indice,
-                                problema: OpenMTRError::validation(
-                                    recebido.mensagem.unwrap_or_default(),
-                                ),
-                            });
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!(erro = %e, "Falha ao receber MTR");
-                    itens.push(ItemResult::Erro {
-                        indice,
-                        problema: OpenMTRError::api_error(502, e.to_string()),
-                    });
-                }
-            }
+        if lotes.is_empty() {
+            return Ok(LoteResult::new(Vec::new()));
         }
 
+        // Poka-yoke: valida tudo antes de qualquer efeito externo.
+        let invalidos: Vec<(usize, String)> = lotes
+            .iter()
+            .enumerate()
+            .filter_map(|(indice, receber)| {
+                validar_recebimento(receber).err().map(|msg| (indice, msg))
+            })
+            .collect();
+        if !invalidos.is_empty() {
+            return Ok(LoteResult::new(itens_invalidos(lotes.len(), &invalidos)));
+        }
+
+        // O SINIR exige um array JSON (mesmo para um único MTR).
+        let body: Vec<Value> = lotes.iter().map(receber_mtr_para_json).collect();
+
+        let resp = match ctx
+            .http
+            .post::<Value, _>("/receberManifestoLote", &body, "receber_mtr")
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                warn!(erro = %e, "Falha ao receber MTR");
+                return Ok(LoteResult::new(erros_para_todos(&lotes, |_| {
+                    OpenMTRError::api_error(502, e.to_string())
+                })));
+            }
+        };
+
+        // HTTP 200 com `erro: true` é erro de negócio do SINIR (lote inteiro).
+        if tem_erro(&resp) {
+            let msg = resp
+                .get("mensagem")
+                .and_then(|s| s.as_str())
+                .unwrap_or("Erro no recebimento em lote");
+            return Ok(LoteResult::new(erros_para_todos(&lotes, |_| {
+                OpenMTRError::validation(msg.to_string())
+            })));
+        }
+
+        let respostas = resp
+            .get("objetoResposta")
+            .and_then(|a| a.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let itens = mapear_recebidos(&lotes, &respostas);
         info!(total = %itens.len(), "MTRs recebidos");
         Ok(LoteResult::new(itens))
     }
