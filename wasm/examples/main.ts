@@ -9,7 +9,7 @@ try {
         if (idx <= 0) continue;
         const key = l.slice(0, idx).trim();
         const val = l.slice(idx + 1).trim().replace(/^"|"$/g, "");
-        if (key === "OPENMTR_SINIR_TOKEN") token = val;
+        if (key === "SINIR_REFRESH_TOKEN") token = val;
         if (key.startsWith("MTR_PE_")) mtrPe[key] = val;
     }
 } catch {
@@ -42,7 +42,7 @@ if (mtrPe["MTR_PE_CNPJ"]) {
 
 // ─── SINIR: token de integração ─────────────────────────────────────────────
 if (!token) {
-    console.log("\n⚠️  OPENMTR_SINIR_TOKEN não encontrado no .env — pulando SINIR");
+    console.log("\n⚠️  SINIR_REFRESH_TOKEN não encontrado no .env — pulando SINIR");
 } else {
     console.log("\n--- init SINIR ---");
     const initResult = JSON.parse(await client.init("sinir", token, ""));

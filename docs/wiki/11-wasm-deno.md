@@ -129,7 +129,7 @@ import init, { OpenMtrWasm } from "./wasm/pkg/open_mtr_wasm.js";
 
 // Carregar token do .env
 const env = Deno.readTextFileSync("../.env");
-const token = env.match(/OPENMTR_SINIR_TOKEN=(.+)/)?.[1]?.trim() ?? "";
+const token = env.match(/SINIR_REFRESH_TOKEN=(.+)/)?.[1]?.trim() ?? "";
 
 // Inicializar WASM
 await init();

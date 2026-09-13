@@ -169,7 +169,7 @@ cargo test -p open-mtr-core --test transport_integration  # mock transport
 Tipos de teste:
 - **Unitários**: validação de newtypes (Cnpj, Cpf, DataMtr), construção de Resposta, mock HttpTransport
 - **Wiremock**: mock da API SINIR para cenários de sucesso/erro
-- **Live**: contra API real (requer `.env` com `OPENMTR_SINIR_TOKEN`)
+- **Live**: contra API real (requer `.env` com `SINIR_REFRESH_TOKEN`)
 - **Token**: cache, refresh, force_refresh, extract_expiry
 
 ## Novos Adapters

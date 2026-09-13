@@ -13,7 +13,7 @@ fn load_env() {
 
 fn has_sinir() -> bool {
     load_env();
-    std::env::var("OPENMTR_SINIR_TOKEN").is_ok()
+    std::env::var("SINIR_REFRESH_TOKEN").is_ok()
 }
 
 fn has_mtrpe() -> bool {
@@ -26,7 +26,7 @@ fn has_mtrpe() -> bool {
 async fn consultar_sinir() -> Vec<open_mtr_core::Mtr> {
     use open_mtr_core::*;
 
-    let token = std::env::var("OPENMTR_SINIR_TOKEN").unwrap();
+    let token = std::env::var("SINIR_REFRESH_TOKEN").unwrap();
 
     let client = match OpenMtrClient::builder()
         .base(System::Sinir)
@@ -305,7 +305,7 @@ async fn test_compare_sinir_vs_mtrpe() {
     let sinir_mtrs = if has_sinir() {
         consultar_sinir().await
     } else {
-        eprintln!("   SKIP: OPENMTR_SINIR_TOKEN not set");
+        eprintln!("   SKIP: SINIR_REFRESH_TOKEN not set");
         Vec::new()
     };
 

@@ -109,7 +109,7 @@ use open_mtr_core::*;
 
 let mtr = OpenMtrClient::builder()
     .base(System::Sinir)
-    .token(std::env::var("OPENMTR_SINIR_TOKEN")?)
+    .token(std::env::var("SINIR_REFRESH_TOKEN")?)
     .build()
     .await?;
 ```
@@ -441,7 +441,7 @@ O enriquecimento é feito em **paralelo** — todas as requisições de detalhe 
 ```typescript
 import { OpenMtrClient } from '@open-mtr/native';
 
-const client = new OpenMtrClient('sinir', process.env.OPENMTR_SINIR_TOKEN!);
+const client = new OpenMtrClient('sinir', process.env.SINIR_REFRESH_TOKEN!);
 
 // Consulta
 const resp = await client.consultarMtrs(JSON.stringify({
@@ -488,7 +488,7 @@ cargo test -p open-mtr-core --test live_compare_systems  # ambos lado a lado
 
 ```bash
 cp .env.example .env
-# SINIR: OPENMTR_SINIR_TOKEN
+# SINIR: SINIR_REFRESH_TOKEN
 # MTR-PE: MTR_PE_CNPJ, MTR_PE_CPF_USER, MTR_PE_PASSWORD, MTR_PE_UNITY
 cargo test -p open-mtr-core --test live_sinir_test
 cargo test -p open-mtr-core --test live_mtr_pe_consulta

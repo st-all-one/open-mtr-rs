@@ -10,7 +10,7 @@ function loadToken(): string {
     try {
         const env = Deno.readTextFileSync("../.env");
         for (const l of env.split("\n")) {
-            if (l.startsWith("OPENMTR_SINIR_TOKEN=")) {
+            if (l.startsWith("SINIR_REFRESH_TOKEN=")) {
                 token = l.split("=").slice(1).join("=").trim();
                 break;
             }
@@ -60,7 +60,7 @@ function assertOk(resp: any, label: string) {
 
 Deno.test({ name: "00_bootstrap: WASM init", fn: async () => {
     await init();
-    if (!hasToken()) { console.log("  SKIP: OPENMTR_SINIR_TOKEN not set"); return; }
+    if (!hasToken()) { console.log("  SKIP: SINIR_REFRESH_TOKEN not set"); return; }
     client = await ensureClient();
     console.log("  init OK");
 } });

@@ -16,7 +16,7 @@ fn load_env() {
 #[tokio::test]
 async fn test_sinir_consultar_com_parte_transportador() {
     load_env();
-    let token = match std::env::var("OPENMTR_SINIR_TOKEN") {
+    let token = match std::env::var("SINIR_REFRESH_TOKEN") {
         Ok(t) => t,
         Err(_) => {
             eprintln!("SKIP: sem token SINIR");

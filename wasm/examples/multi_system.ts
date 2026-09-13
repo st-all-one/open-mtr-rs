@@ -81,7 +81,7 @@ async function criarClienteMtrPe(env: Record<string, string>): Promise<OpenMtrWa
 /** Cliente WASM do SINIR: usa token de integração (sem auth clássica). */
 async function criarClienteSinir(env: Record<string, string>): Promise<OpenMtrWasm> {
     const cliente = new OpenMtrWasm();
-    const initRes = await cliente.init("sinir", env["OPENMTR_SINIR_TOKEN"], "");
+    const initRes = await cliente.init("sinir", env["SINIR_REFRESH_TOKEN"], "");
     const parsed = JSON.parse(initRes);
     if (!parsed.ok) throw new Error(`SINIR init falhou: ${parsed.mensagem}`);
     return cliente;
@@ -164,7 +164,7 @@ if (env["MTR_PE_CNPJ"]) {
 }
 
 // ─── Sistema 2: SINIR ──────────────────────────────────────────────────────
-if (env["OPENMTR_SINIR_TOKEN"]) {
+if (env["SINIR_REFRESH_TOKEN"]) {
     console.log("\n🏭 SINIR (Nacional)");
     try {
         const sinir = await criarClienteSinir(env);

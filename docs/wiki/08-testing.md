@@ -64,7 +64,7 @@ async fn test_sinir_consultar_mtr_com_lista() {
 
 ## Testes Live
 
-Executam contra a API SINIR real. Pulam automaticamente se `OPENMTR_SINIR_TOKEN` não estiver configurado:
+Executam contra a API SINIR real. Pulam automaticamente se `SINIR_REFRESH_TOKEN` não estiver configurado:
 
 ```bash
 cp .env.example .env
