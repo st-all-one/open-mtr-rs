@@ -240,7 +240,7 @@ impl OpenMtrClientBuilder {
     #[cfg(feature = "native-http")]
     pub async fn build(self) -> Result<OpenMtrClient, OpenMTRError> {
         let transport = crate::openmtr::transport::reqwest::ReqwestTransport::new(
-            self.timeout.map_or(Duration::from_mins(1), |d| d),
+            self.timeout.unwrap_or(Duration::from_mins(1)),
         )?;
         self.build_with_transport(transport).await
     }

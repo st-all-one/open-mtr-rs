@@ -7,7 +7,7 @@
 //!   cargo run --example download_demo
 //!
 //! O arquivo .env na raiz do projeto deve conter:
-//!   OPENMTR_SINIR_TOKEN=...           # Token da conta SINIR
+//!   SINIR_REFRESH_TOKEN=...           # Token da conta SINIR
 //!   MTR_PE_CNPJ=...                   # CNPJ da empresa no MTR-PE
 //!   MTR_PE_CPF_USER=...               # CPF do usuário MTR-PE
 //!   MTR_PE_PASSWORD=...               # Senha do usuário MTR-PE
@@ -37,7 +37,7 @@ fn salvar_download(item: &DownloadItem, dir: &Path) {
     println!("   ✅ Salvo: {} ({} bytes)", caminho.display(), item.buffer.len());
 }
 
-fn reportar_erros(erros: &[Problema]) {
+fn reportar_erros(erros: &[OpenMTRError]) {
     for erro in erros {
         println!("   ❌ [{}] {}", erro.status, erro.detail);
     }
@@ -288,9 +288,9 @@ async fn main() {
     println!("{}", "=".repeat(70));
 
     // ─── SINIR ──────────────────────────────────────────────────────────
-    match env("OPENMTR_SINIR_TOKEN") {
+    match env("SINIR_REFRESH_TOKEN") {
         Some(token) => baixar_do_sinir(&token).await,
-        None => println!("\n⚠️  OPENMTR_SINIR_TOKEN não definido — pulando SINIR"),
+        None => println!("\n⚠️  SINIR_REFRESH_TOKEN não definido — pulando SINIR"),
     }
 
     // ─── MTR-PE ─────────────────────────────────────────────────────────
