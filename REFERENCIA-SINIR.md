@@ -481,6 +481,119 @@ async fn exemplo_tabelas(client: MtrClient) -> Result<(), MtrError> {
 
 ---
 
+## 13. Recebimento em Lote — contrato validado
+
+> Validado ao vivo contra `admin.sinir.gov.br` (conta destinadora UBA, unid. 130204).
+> O `SinirAdapter::receber_mtrs` serializa exatamente este formato.
+
+### `POST /receberManifestoLote`
+
+O corpo é **um array JSON** — mesmo para um único MTR. Enviar um objeto solto
+resulta em HTTP 400 (antes do Jackson). Esta era a causa de o recebimento SINIR
+nunca funcionar no adapter.
+
+```json
+[{
+  "manNumero": "251032769556",
+  "dataRecebimento": 1789330800000,
+  "nomeMotorista": "WELLINGTON",
+  "placaVeiculo": "RLZ4A36",
+  "nomeResponsavelRecebimento": "Norlu Apoio",
+  "observacoes": "recebimento via open-mtr-rs",
+  "listaManifestoResiduos": [
+    {
+      "resCodigoIbama": "Classe A",
+      "marQuantidade": 5,
+      "marQuantidadeRecebida": 5,
+      "uniCodigo": 3,
+      "tieCodigo": 4,
+      "claCodigo": 11,
+      "tiaCodigo": 4,
+      "traCodigo": 43,
+      "marJustificativa": "Substituição do resíduo Classe A por 170107 (RCC)",
+      "resCodigoIbamaNovo": "170107",
+      "traCodigoNovo": 43
+    }
+  ]
+}]
+```
+
+| Campo | Tipo | Obrigatório | Observação |
+|---|---|---|---|
+| `manNumero` | String | S | Número do MTR |
+| `dataRecebimento` | Long | S | Timestamp em ms (aceita data retroativa) |
+| `nomeMotorista` | String | S | Ecoado pela API |
+| `placaVeiculo` | String | S | Sem hífen (`RLZ4A36`) |
+| `nomeResponsavelRecebimento` | String | S | **Idêntico ao responsável cadastrado** |
+| `observacoes` | String | N | |
+| `listaManifestoResiduos` | Array | S | **Plural no SINIR** (o SIGOR usa singular `listaManifestoResiduo`) |
+
+Campos de `listaManifestoResiduos[]`:
+
+| Campo | Tipo | Obrigatório | Observação |
+|---|---|---|---|
+| `resCodigoIbama` | String | S | Código **declarado no manifesto** (ex.: `"Classe A"`) |
+| `marQuantidade` | Double | S | Quantidade original |
+| `marQuantidadeRecebida` | Double | S | Quantidade recebida |
+| `uniCodigo` / `tieCodigo` / `claCodigo` / `tiaCodigo` / `traCodigo` | Integer | S | Unidade / estado físico / classe / acondicionamento / tratamento |
+| `marJustificativa` | String | Cond. | Obrigatória em divergência de quantidade **ou** substituição |
+| `resCodigoIbamaNovo` | String | N | Substituição do resíduo |
+| `traCodigoNovo` / `claCodigoNovo` | Integer | N | Novos parâmetros da substituição |
+| `marNumeroONU` / `marClasseRisco` / `marNomeEmbarque` | String | N | Apenas resíduo perigoso |
+| `greCodigo` | Integer | N | Grupo de embalagem (**inteiro**; string causa HTTP 400) |
+
+### Resposta
+
+```json
+{
+  "erro": false,
+  "mensagem": "Manifesto recebido com sucesso!",
+  "totalRecords": 0,
+  "objetoResposta": [
+    {
+      "manNumero": "251032769556",
+      "manCodigo": 32853390,
+      "restResponseValido": true,
+      "restResponseMensagem": "Manifesto recebido com sucesso!"
+    }
+  ]
+}
+```
+
+O adapter correlaciona cada item de `objetoResposta` ao MTR de entrada por
+`manNumero` e usa `restResponseValido`/`restResponseMensagem`. Quando a API
+responde **HTTP 200 com `erro: true`**, o lote inteiro é marcado como erro de
+negócio (com `mensagem`).
+
+### Regras de negócio (descobertas ao vivo)
+
+1. **Responsável cadastrado.** `nomeResponsavelRecebimento` precisa ser um
+   responsável **cadastrado na unidade**; normalmente é o *"nome especial"* do
+   usuário logado (não o login). Caso contrário:
+   `"Responsável pelo recebimento não encontrado!"`.
+2. **Resíduo casado com o manifesto.** `resCodigoIbama` deve ser o código
+   declarado no manifesto (ex.: `"Classe A"`). Enviar outro código sem
+   `resCodigoIbamaNovo` falha com
+   `"Resíduo/Quantidade/Tratamento não encontrado"`.
+3. **Substituição no próprio item.** Para trocar o resíduo, enviam
+   `resCodigoIbamaNovo` (+ `traCodigoNovo`/`claCodigoNovo`) e
+   `marJustificativa`. **Não** é necessário `/alteraRecebimento` nem duas
+   entradas. O original não é removido: passa a constar com o novo código.
+4. **Período de consulta ≤ 30 dias.** Períodos maiores recebem HTTP 400
+   (`"O período de pesquisa não pode ser superior a 30 dias"`); o adapter
+   valida antes e devolve erro claro (422).
+5. **`listar_classes_por_residuo` não é suportado** no SINIR (HTTP 501);
+   use `listar_classes` e associe localmente.
+
+### Exemplo wiremock (corpo)
+
+O teste `core/tests/wiremock_sinir.rs` valida o corpo enviado via
+`server.received_requests()`: array, nomes corretos, ausência dos campos antigos
+(`nomeResponsavel`, `listaResiduosRecebidos`, `quantidadeRecebida`) e presença de
+`resCodigoIbamaNovo`/`marJustificativa`.
+
+---
+
 ## A. Apêndice — Catálogo de Schemas
 
 ### A.1 Schemas de Requisição
