@@ -5,7 +5,13 @@ statement: Corrigir compilação sem native-http e unificar a função sleep
 created_at: 2026-10-20T02:07:54.042Z
 body_hash: 31cd7915
 schema_version: 2
+revision: 3
+outcomes:
+  - status: success
+    recorded_at: 2026-10-20T02:25:11.387Z
+    notes: make check verde; --no-default-features compila com uma unica sleep (sem bloquear o executor)
 anchors: [UPDATE.md, core/src/openmtr/client/http.rs]
+status: closed
 scope: task
 ---
 Tornar determinística a ordem dos resultados do MTR-PE	core/src/openmtr/adapters/mtr_pe.rs	risk
