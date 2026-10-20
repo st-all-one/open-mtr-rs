@@ -1,4 +1,17 @@
-#![allow(clippy::unwrap_used, clippy::pedantic)]
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
 use std::sync::OnceLock;
 
@@ -51,7 +64,11 @@ async fn get_token() -> String {
 }
 
 /// Obtém a lista de códigos de barras em um período específico (máx 30 dias)
-async fn listar_barcodes_range(token: &str, inicio: chrono::NaiveDate, fim: chrono::NaiveDate) -> Vec<String> {
+async fn listar_barcodes_range(
+    token: &str,
+    inicio: chrono::NaiveDate,
+    fim: chrono::NaiveDate,
+) -> Vec<String> {
     let url = format!(
         "{BASE}/retornaListaCodigoBarasManifesto/{}/{}",
         inicio.format("%Y%m%d"),
@@ -77,10 +94,17 @@ async fn listar_barcodes_range(token: &str, inicio: chrono::NaiveDate, fim: chro
         Ok(resp) => {
             let codigos: Vec<String> = resp["codigos"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|c| c.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|c| c.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             if codigos.is_empty() {
-                println!("   Response: {}", serde_json::to_string_pretty(&resp).unwrap_or_default());
+                println!(
+                    "   Response: {}",
+                    serde_json::to_string_pretty(&resp).unwrap_or_default()
+                );
             }
             codigos
         }
@@ -130,7 +154,7 @@ async fn test_pe_consulta_completa() {
     let barcodes = if barcodes.is_empty() {
         // API tem máximo de 30 dias — tenta janelas de 30 dias nos últimos 6 meses
         let mut found: Vec<String> = Vec::new();
-        use chrono::{NaiveDate, Duration};
+        use chrono::Duration;
         let hoje = chrono::Utc::now().date_naive();
 
         for meses in 0..6 {
@@ -194,7 +218,10 @@ async fn consultar_e_exibir(token: &str, barcodes: &[String]) {
         );
 
         // Mostra JSON completo formatado
-        println!("\n{}", serde_json::to_string_pretty(&mtr).unwrap_or_default());
+        println!(
+            "\n{}",
+            serde_json::to_string_pretty(&mtr).unwrap_or_default()
+        );
         println!("{}", "=".repeat(70));
     }
 }

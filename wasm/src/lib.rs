@@ -1,24 +1,31 @@
+#![allow(
+    unsafe_code,
+    clippy::await_holding_refcell_ref,
+    clippy::disallowed_macros,
+    clippy::disallowed_types,
+    clippy::future_not_send,
+    clippy::wildcard_imports,
+    reason = "binding wasm single-thread: RefCell/Rc são o modelo imposto pelo wasm-bindgen; unsafe confinado a transport.rs"
+)]
+
 use std::cell::RefCell;
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use open_mtr_core::openmtr::system::System;
-use open_mtr_core::openmtr::domain::{
-    AceitarAlteracao, CancelarMtr, CriarMtr, CriarMtrComplementar,
-    DownloadCdf, FiltroCdf, FiltroMtr, GerarCdf, ModificarMtr,
-    ReceberMtr,
-};
-use open_mtr_core::openmtr::config::Config;
-use open_mtr_core::openmtr::client::http::MtrHttpClient;
 use open_mtr_core::openmtr::adapters::MtrCtx;
+use open_mtr_core::openmtr::client::http::MtrHttpClient;
+use open_mtr_core::openmtr::config::Config;
+use open_mtr_core::openmtr::domain::{
+    AceitarAlteracao, CancelarMtr, CriarMtr, CriarMtrComplementar, DownloadCdf, FiltroCdf,
+    FiltroMtr, GerarCdf, ModificarMtr, ReceberMtr,
+};
+use open_mtr_core::openmtr::system::System;
 
 mod transport;
 use transport::JsFetchTransport;
 
-fn lote_result_to_json<T: Serialize>(
-    result: &open_mtr_core::MtrResult<T>,
-) -> String {
+fn lote_result_to_json<T: Serialize>(result: &open_mtr_core::MtrResult<T>) -> String {
     match result {
         Ok(resp) => serde_json::to_string(resp)
             .unwrap_or_else(|e| format!(r#"{{"ok":false,"mensagem":"serialize error: {e}"}}"#)),
@@ -26,13 +33,20 @@ fn lote_result_to_json<T: Serialize>(
             "ok": false,
             "status": err.status,
             "mensagem": format!("{} — {}", err.title, err.detail),
-        })).unwrap_or_default(),
+        }))
+        .unwrap_or_default(),
     }
 }
 
 #[wasm_bindgen]
 pub struct OpenMtrWasm {
     client: RefCell<Option<open_mtr_core::OpenMtrClient>>,
+}
+
+impl Default for OpenMtrWasm {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[wasm_bindgen]
@@ -50,7 +64,8 @@ impl OpenMtrWasm {
         token: String,
         base_url: String,
     ) -> Result<String, JsError> {
-        let system: System = system.parse()
+        let system: System = system
+            .parse()
             .map_err(|_| JsError::new(&format!("sistema inválido: {system}")))?;
 
         let base_url = if base_url.is_empty() {
@@ -69,21 +84,18 @@ impl OpenMtrWasm {
             .map_err(|e| JsError::new(&e.to_string()))?;
 
         let transport = JsFetchTransport::new();
-        let http = MtrHttpClient::new(config.clone(), transport)
+        let http = MtrHttpClient::new(config.clone(), transport);
+
+        let adapter = system.adapter().map_err(|e| JsError::new(&e.to_string()))?;
+
+        let ctx = MtrCtx::new(http, config);
+
+        adapter
+            .autenticar_token(&ctx)
+            .await
             .map_err(|e| JsError::new(&e.to_string()))?;
 
-        let adapter = system.adapter()
-            .map_err(|e| JsError::new(&e.to_string()))?;
-
-        let ctx = MtrCtx { http, config };
-
-        adapter.autenticar_token(&ctx).await
-            .map_err(|e| JsError::new(&e.to_string()))?;
-
-        let inner = open_mtr_core::OpenMtrClient::from_parts(
-            std::sync::Arc::new(ctx),
-            adapter,
-        );
+        let inner = open_mtr_core::OpenMtrClient::from_parts(std::sync::Arc::new(ctx), adapter);
 
         *self.client.borrow_mut() = Some(inner);
         Ok(r#"{"ok":true,"mensagem":"inicializado"}"#.into())
@@ -97,12 +109,9 @@ impl OpenMtrWasm {
     /// `params_json`: `{"tipo":"cpf_senha_unidade","cpf":"...","senha":"...","unidade":123,"cnpj":"..."}`
     ///
     /// Retorna `{"ok":true,"token":"..."}` ou `{"ok":false,"mensagem":"..."}`.
-    pub async fn obter_token(
-        &self,
-        system: String,
-        params_json: &str,
-    ) -> Result<String, JsError> {
-        let system: System = system.parse()
+    pub async fn obter_token(&self, system: String, params_json: &str) -> Result<String, JsError> {
+        let system: System = system
+            .parse()
             .map_err(|_| JsError::new(&format!("sistema inválido: {system}")))?;
 
         let params: open_mtr_core::openmtr::open_mtr_auth::AuthParams =
@@ -121,15 +130,21 @@ impl OpenMtrWasm {
         Ok(serde_json::to_string(&serde_json::json!({
             "ok": true,
             "token": token,
-        })).unwrap_or_default())
+        }))
+        .unwrap_or_default())
     }
 
     fn client(&self) -> Result<std::cell::Ref<'_, open_mtr_core::OpenMtrClient>, JsError> {
         let borrowed = self.client.borrow();
         if borrowed.is_none() {
-            return Err(JsError::new("cliente não inicializado — chame init() primeiro"));
+            return Err(JsError::new(
+                "cliente não inicializado — chame init() primeiro",
+            ));
         }
-        Ok(std::cell::Ref::map(borrowed, |b| b.as_ref().unwrap()))
+        let Some(client) = std::cell::Ref::filter_map(borrowed, Option::as_ref).ok() else {
+            return Err(JsError::new("cliente não inicializado"));
+        };
+        Ok(client)
     }
 
     pub async fn health(&self) -> Result<String, JsError> {
@@ -139,85 +154,86 @@ impl OpenMtrWasm {
             Err(e) => Ok(serde_json::to_string(&serde_json::json!({
                 "ok": false,
                 "mensagem": e.to_string(),
-            })).unwrap_or_default()),
+            }))
+            .unwrap_or_default()),
         }
     }
 
     pub async fn consultar_mtrs(&self, filtro_json: &str) -> Result<String, JsError> {
-        let filtro: FiltroMtr = serde_json::from_str(filtro_json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let filtro: FiltroMtr =
+            serde_json::from_str(filtro_json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.consultar_mtrs(&filtro).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn criar_mtrs(&self, json: &str) -> Result<String, JsError> {
-        let mtrs: Vec<CriarMtr> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let mtrs: Vec<CriarMtr> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.criar_mtrs(mtrs).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn receber_mtrs(&self, json: &str) -> Result<String, JsError> {
-        let lotes: Vec<ReceberMtr> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let lotes: Vec<ReceberMtr> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.receber_mtrs(lotes).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn cancelar_mtrs(&self, json: &str) -> Result<String, JsError> {
-        let reqs: Vec<CancelarMtr> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let reqs: Vec<CancelarMtr> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.cancelar_mtrs(reqs).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn modificar_mtrs(&self, json: &str) -> Result<String, JsError> {
-        let reqs: Vec<ModificarMtr> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let reqs: Vec<ModificarMtr> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.modificar_mtrs(reqs).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn aceitar_alteracoes(&self, json: &str) -> Result<String, JsError> {
-        let reqs: Vec<AceitarAlteracao> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let reqs: Vec<AceitarAlteracao> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.aceitar_alteracoes(reqs).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn download_mtrs(&self, json: &str) -> Result<String, JsError> {
-        let nums: Vec<String> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let nums: Vec<String> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.download_mtrs(nums).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn gerar_cdfs(&self, json: &str) -> Result<String, JsError> {
-        let reqs: Vec<GerarCdf> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let reqs: Vec<GerarCdf> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.gerar_cdfs(reqs).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn consultar_cdfs(&self, json: &str) -> Result<String, JsError> {
-        let filtro: FiltroCdf = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let filtro: FiltroCdf =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.consultar_cdfs(&filtro).await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn download_cdfs(&self, json: &str) -> Result<String, JsError> {
-        let reqs: Vec<DownloadCdf> = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let reqs: Vec<DownloadCdf> =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.download_cdfs(reqs).await;
         Ok(lote_result_to_json(&result))
@@ -265,15 +281,20 @@ impl OpenMtrWasm {
         Ok(lote_result_to_json(&result))
     }
 
-    pub async fn listar_acondicionamentos_por_estado_fisico(&self, codigo_estado: u32) -> Result<String, JsError> {
+    pub async fn listar_acondicionamentos_por_estado_fisico(
+        &self,
+        codigo_estado: u32,
+    ) -> Result<String, JsError> {
         let client = self.client()?;
-        let result = client.listar_acondicionamentos_por_estado_fisico(codigo_estado).await;
+        let result = client
+            .listar_acondicionamentos_por_estado_fisico(codigo_estado)
+            .await;
         Ok(lote_result_to_json(&result))
     }
 
     pub async fn criar_manifesto_complementar(&self, json: &str) -> Result<String, JsError> {
-        let req: CriarMtrComplementar = serde_json::from_str(json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let req: CriarMtrComplementar =
+            serde_json::from_str(json).map_err(|e| JsError::new(&e.to_string()))?;
         let client = self.client()?;
         let result = client.criar_manifesto_complementar(req).await;
         Ok(lote_result_to_json(&result))

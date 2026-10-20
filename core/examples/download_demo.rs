@@ -1,3 +1,18 @@
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
+
 //! Demonstração de download de MTRs do SINIR e MTR-PE.
 //!
 //! Usa a biblioteca open-mtr-core para consultar e baixar MTRs reais
@@ -34,10 +49,14 @@ fn salvar_download(item: &DownloadItem, dir: &Path) {
     let caminho = dir.join(&item.filename);
     std::fs::create_dir_all(dir).expect("criar diretório");
     std::fs::write(&caminho, &item.buffer).expect("salvar arquivo");
-    println!("   ✅ Salvo: {} ({} bytes)", caminho.display(), item.buffer.len());
+    println!(
+        "   ✅ Salvo: {} ({} bytes)",
+        caminho.display(),
+        item.buffer.len()
+    );
 }
 
-fn reportar_erros(erros: &[Problema]) {
+fn reportar_erros(erros: &[OpenMTRError]) {
     for erro in erros {
         println!("   ❌ [{}] {}", erro.status, erro.detail);
     }
@@ -45,23 +64,21 @@ fn reportar_erros(erros: &[Problema]) {
 
 /// Tenta consultar MTRs com janelas de 30 dias para trás (até 180 dias).
 /// Usa o FiltroMtr com periodo e tenta diferentes tipoParceiro (Gerador, Transportador, Destinador).
-async fn descobrir_mtrs_por_periodo(
-    client: &OpenMtrClient,
-) -> Vec<String> {
+async fn descobrir_mtrs_por_periodo(client: &OpenMtrClient) -> Vec<String> {
     let hoje = Utc::now().date_naive();
 
     // Tenta com cada tipo de parceiro: Gerador (padrão), Transportador, Destinador
     use TipoParte as Tp;
     for tipo in [None::<Tp>, Some(Tp::Transportador), Some(Tp::Destinador)] {
-            for dias in (30..=180).step_by(30) {
-                let inicio = hoje - chrono::Duration::days(dias);
-                let fim = hoje - chrono::Duration::days(dias - 29);
+        for dias in (30..=180).step_by(30) {
+            let inicio = hoje - chrono::Duration::days(dias);
+            let fim = hoje - chrono::Duration::days(dias - 29);
 
-                let parte = tipo.clone().map(|t| FiltroParte {
-                    tipo: t,
-                    documento: None,
-                    unidade: None,
-                });
+            let parte = tipo.clone().map(|t| FiltroParte {
+                tipo: t,
+                documento: None,
+                unidade: None,
+            });
 
             let filtro = FiltroMtr {
                 periodo: Some(Periodo::new(DataMtr::new(inicio), DataMtr::new(fim)).unwrap()),
@@ -79,11 +96,8 @@ async fn descobrir_mtrs_por_periodo(
 
             match client.consultar_mtrs(&filtro).await {
                 Ok(resp) if !resp.dados.is_empty() => {
-                    let numeros: Vec<String> = resp
-                        .dados
-                        .iter()
-                        .map(|m| m.numero.clone())
-                        .collect();
+                    let numeros: Vec<String> =
+                        resp.dados.iter().map(|m| m.numero.clone()).collect();
                     println!(
                         "   ✅ Encontrados {} MTRs (tipo={nome_tipo}, período {inicio} a {fim})",
                         numeros.len()
@@ -92,9 +106,7 @@ async fn descobrir_mtrs_por_periodo(
                 }
                 Ok(_) => {} // sem MTRs nessa janela, continua
                 Err(e) => {
-                    println!(
-                        "   ⚠️  Erro na consulta (tipo={nome_tipo}, {inicio} a {fim}): {e}"
-                    );
+                    println!("   ⚠️  Erro na consulta (tipo={nome_tipo}, {inicio} a {fim}): {e}");
                 }
             }
         }
@@ -128,9 +140,7 @@ async fn baixar_do_sinir(token: &str) {
 
     if numeros.is_empty() {
         println!("   ⚠️  Nenhum MTR encontrado nos últimos 180 dias");
-        println!(
-            "   💡 Defina OPENMTR_SINIR_MTRS no .env com números separados por vírgula"
-        );
+        println!("   💡 Defina OPENMTR_SINIR_MTRS no .env com números separados por vírgula");
         println!("   💡 Ex: OPENMTR_SINIR_MTRS=123456,789012");
         return;
     }
@@ -177,7 +187,11 @@ async fn autenticar_mtr_pe() -> Option<String> {
     let json: serde_json::Value = resp.json().await.ok()?;
     let token = json["token"].as_str()?.to_string();
 
-    println!("   Token obtido: {}...{}", &token[..20], &token[token.len() - 10..]);
+    println!(
+        "   Token obtido: {}...{}",
+        &token[..20],
+        &token[token.len() - 10..]
+    );
     Some(token)
 }
 
@@ -220,7 +234,11 @@ async fn descobrir_barcodes_mtr_pe(token: &str) -> Vec<String> {
 
         let codigos: Vec<String> = json["codigos"]
             .as_array()
-            .map(|a| a.iter().filter_map(|c| c.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|c| c.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         if !codigos.is_empty() {

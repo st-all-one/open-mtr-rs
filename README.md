@@ -4,8 +4,8 @@
 
 **Shell unificado para gestão de MTRs — assíncrono, multi-sistema, tipos universais**
 
-[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-2b3a42?style=for-the-badge)](https://opensource.org/licenses/MPL-2.0)
-[![Rust](https://img.shields.io/badge/Rust-1.85%2B-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-2b3a42?style=for-the-badge)](#-licença)
+[![Rust](https://img.shields.io/badge/Rust-1.99%2B-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Made in Brazil](https://img.shields.io/badge/Made_in-Brazil-009739?style=for-the-badge)](https://github.com/topics/brazil)
 
 </div>
@@ -501,7 +501,7 @@ cargo test -p open-mtr-core --test live_compare_systems
 
 | Componente | Tecnologia |
 |---|---|
-| Runtime | Rust 1.85+ (edition 2024) |
+| Runtime | Rust 1.99+ (edition 2024) |
 | Async | `tokio` (sync, time, fs) |
 | HTTP | `reqwest` 0.12 (async, rustls-tls) |
 | Serialização | `serde` + `serde_json` |
@@ -511,7 +511,7 @@ cargo test -p open-mtr-core --test live_compare_systems
 | Rate limiting | Sliding window configurável |
 | FFI (Node.js) | napi-rs |
 | FFI (Python/Kotlin/Swift) | UniFFI |
-| Licença | MPL-2.0 |
+| Licença | MIT OR Apache-2.0 |
 
 ### Dependências
 
@@ -592,6 +592,6 @@ Ver [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) para documentação c
 
 <div align="center">
 
-**Licença:** Mozilla Public License v2.0 (MPL-2.0)
+**Licença:** MIT OR Apache-2.0 (ver `LICENSE-MIT` e `LICENSE-APACHE`)
 
 </div>

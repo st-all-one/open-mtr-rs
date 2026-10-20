@@ -1,10 +1,29 @@
-#![allow(clippy::module_name_repetitions)]
-
 use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
+/// Classificação tipada de um [`OpenMTRError`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ErrorKind {
+    Network,
+    Timeout,
+    Auth,
+    Validation,
+    Config,
+    Api,
+    NotFound,
+    NotSupported,
+    #[default]
+    Internal,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[allow(
+    clippy::upper_case_acronyms,
+    reason = "OpenMTR é o nome oficial do projeto e do erro público"
+)]
 #[error("[{status}] {title} — {detail} (type: {type}, instance: {instance})")]
 pub struct OpenMTRError {
     pub r#type: Url,
@@ -12,76 +31,102 @@ pub struct OpenMTRError {
     pub status: u16,
     pub detail: String,
     pub instance: Uuid,
+    /// Classificação estável para decisões de retry/tratamento.
+    #[serde(default)]
+    pub kind: ErrorKind,
 }
 
 impl OpenMTRError {
-    pub fn new(status: u16, title: impl Into<String>, detail: impl Into<String>) -> Self {
+    fn with_kind(
+        status: u16,
+        title: impl Into<String>,
+        detail: impl Into<String>,
+        kind: ErrorKind,
+        r#type: Url,
+    ) -> Self {
         let title = title.into();
         let detail = detail.into();
         let instance = Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext));
-        tracing::info!(%status, %title, %detail, %instance, "OpenMTRError created");
-        Self { r#type: error_types::internal(), title, status, detail, instance }
+        tracing::info!(%status, %title, %detail, %instance, ?kind, "OpenMTRError created");
+        Self {
+            r#type,
+            title,
+            status,
+            detail,
+            instance,
+            kind,
+        }
+    }
+
+    pub fn new(status: u16, title: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::with_kind(
+            status,
+            title,
+            detail,
+            ErrorKind::Internal,
+            error_types::internal(),
+        )
     }
 
     pub fn network(detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::network(),
-            title: "Erro de rede".into(),
-            status: 503,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            503,
+            "Erro de rede",
+            detail,
+            ErrorKind::Network,
+            error_types::network(),
+        )
     }
 
     pub fn timeout(detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::timeout(),
-            title: "Tempo limite excedido".into(),
-            status: 504,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            504,
+            "Tempo limite excedido",
+            detail,
+            ErrorKind::Timeout,
+            error_types::timeout(),
+        )
     }
 
     pub fn auth(detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::auth(),
-            title: "Erro de autenticação".into(),
-            status: 401,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            401,
+            "Erro de autenticação",
+            detail,
+            ErrorKind::Auth,
+            error_types::auth(),
+        )
     }
 
     pub fn config(detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::config(),
-            title: "Erro de configuração".into(),
-            status: 500,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            500,
+            "Erro de configuração",
+            detail,
+            ErrorKind::Config,
+            error_types::config(),
+        )
     }
 
     pub fn validation(detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::validation(),
-            title: "Erro de validação".into(),
-            status: 422,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            422,
+            "Erro de validação",
+            detail,
+            ErrorKind::Validation,
+            error_types::validation(),
+        )
     }
 
     #[must_use]
     pub fn not_supported(operation: &str) -> Self {
-        Self {
-            r#type: error_types::not_supported(),
-            title: "Operação não suportada".into(),
-            status: 501,
-            detail: format!("Operação não suportada: {operation}"),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            501,
+            "Operação não suportada",
+            format!("Operação não suportada: {operation}"),
+            ErrorKind::NotSupported,
+            error_types::not_supported(),
+        )
     }
 
     pub fn parse_error(detail: impl Into<String>) -> Self {
@@ -89,39 +134,54 @@ impl OpenMTRError {
     }
 
     pub fn not_found(detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::not_found(),
-            title: "Não encontrado".into(),
-            status: 404,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        Self::with_kind(
+            404,
+            "Não encontrado",
+            detail,
+            ErrorKind::NotFound,
+            error_types::not_found(),
+        )
     }
 
     pub fn api_error(status: u16, detail: impl Into<String>) -> Self {
-        Self {
-            r#type: error_types::api(),
-            title: "Erro de API".into(),
+        Self::with_kind(
             status,
-            detail: detail.into(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+            "Erro de API",
+            detail,
+            ErrorKind::Api,
+            error_types::api(),
+        )
+    }
+
+    /// Substitui o `instance` por um identificador determinístico.
+    ///
+    /// Útil para golden tests e para o `OpenMtrClient`, que reatribui as
+    /// instâncias com o `IdGenerator` injetado no `MtrCtx`.
+    #[must_use]
+    pub fn with_instance(mut self, instance: Uuid) -> Self {
+        self.instance = instance;
+        self
     }
 
     #[must_use]
     pub fn is_timeout(&self) -> bool {
-        self.status == 504 || self.detail.to_lowercase().contains("timeout")
+        matches!(self.kind, ErrorKind::Timeout) || self.status == 504
+    }
+
+    #[must_use]
+    pub fn is_network(&self) -> bool {
+        matches!(self.kind, ErrorKind::Network | ErrorKind::Timeout)
     }
 
     #[must_use]
     pub fn http_error(status: u16, title: &str, detail: &str) -> Self {
-        Self {
-            r#type: error_types::api(),
-            title: title.to_string(),
-            status,
-            detail: detail.to_string(),
-            instance: Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)),
-        }
+        let (kind, r#type) = match status {
+            401 => (ErrorKind::Auth, error_types::auth()),
+            404 => (ErrorKind::NotFound, error_types::not_found()),
+            422 => (ErrorKind::Validation, error_types::validation()),
+            _ => (ErrorKind::Api, error_types::api()),
+        };
+        Self::with_kind(status, title, detail, kind, r#type)
     }
 }
 
@@ -143,31 +203,69 @@ impl From<serde_json::Error> for OpenMTRError {
 }
 
 pub mod error_types {
+    use std::sync::LazyLock;
     use url::Url;
 
+    #[allow(
+        clippy::expect_used,
+        reason = "URN montada apenas com sufixos literais conhecidos; a sintaxe é infalível"
+    )]
     fn make_urn(suffix: &str) -> Url {
-        Url::parse(&format!("urn:openmtr:error:{suffix}"))
-            .expect("urn:openmtr:error:{suffix} is a valid Url")
+        Url::parse(&format!("urn:openmtr:error:{suffix}")).expect("URN de erro do openMTR é válida")
     }
 
+    macro_rules! lazy_urn {
+        ($name:ident, $suffix:literal) => {
+            static $name: LazyLock<Url> = LazyLock::new(|| make_urn($suffix));
+        };
+    }
+
+    lazy_urn!(NETWORK, "network");
+    lazy_urn!(TIMEOUT, "timeout");
+    lazy_urn!(AUTH, "authentication");
+    lazy_urn!(VALIDATION, "validation");
+    lazy_urn!(CONFIG, "configuration");
+    lazy_urn!(NOT_FOUND, "not-found");
+    lazy_urn!(API, "api-error");
+    lazy_urn!(NOT_SUPPORTED, "not-supported");
+    lazy_urn!(INTERNAL, "internal");
+
     #[must_use]
-    pub fn network() -> Url { make_urn("network") }
+    pub fn network() -> Url {
+        NETWORK.clone()
+    }
     #[must_use]
-    pub fn timeout() -> Url { make_urn("timeout") }
+    pub fn timeout() -> Url {
+        TIMEOUT.clone()
+    }
     #[must_use]
-    pub fn auth() -> Url { make_urn("authentication") }
+    pub fn auth() -> Url {
+        AUTH.clone()
+    }
     #[must_use]
-    pub fn validation() -> Url { make_urn("validation") }
+    pub fn validation() -> Url {
+        VALIDATION.clone()
+    }
     #[must_use]
-    pub fn config() -> Url { make_urn("configuration") }
+    pub fn config() -> Url {
+        CONFIG.clone()
+    }
     #[must_use]
-    pub fn not_found() -> Url { make_urn("not-found") }
+    pub fn not_found() -> Url {
+        NOT_FOUND.clone()
+    }
     #[must_use]
-    pub fn api() -> Url { make_urn("api-error") }
+    pub fn api() -> Url {
+        API.clone()
+    }
     #[must_use]
-    pub fn not_supported() -> Url { make_urn("not-supported") }
+    pub fn not_supported() -> Url {
+        NOT_SUPPORTED.clone()
+    }
     #[must_use]
-    pub fn internal() -> Url { make_urn("internal") }
+    pub fn internal() -> Url {
+        INTERNAL.clone()
+    }
 }
 
 #[cfg(test)]
@@ -185,12 +283,28 @@ mod tests {
     fn test_network_error() {
         let err = OpenMTRError::network("connection refused");
         assert_eq!(err.status, 503);
+        assert_eq!(err.kind, ErrorKind::Network);
     }
 
     #[test]
     fn test_timeout_error() {
         let err = OpenMTRError::timeout("crawled");
         assert_eq!(err.status, 504);
+        assert_eq!(err.kind, ErrorKind::Timeout);
+        assert!(err.is_timeout());
+    }
+
+    #[test]
+    fn test_is_timeout_is_not_substring_based() {
+        let err = OpenMTRError::network("upstream timeout announced");
+        assert!(!err.is_timeout());
+    }
+
+    #[test]
+    fn test_with_instance_is_deterministic() {
+        let instance = Uuid::from_u128(42);
+        let err = OpenMTRError::validation("x").with_instance(instance);
+        assert_eq!(err.instance, instance);
     }
 
     #[test]
@@ -220,15 +334,51 @@ mod tests {
 
     #[test]
     fn test_error_types_are_valid_urls() {
-        assert!(error_types::network().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::timeout().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::auth().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::validation().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::config().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::not_found().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::api().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::not_supported().as_str().starts_with("urn:openmtr:error:"));
-        assert!(error_types::internal().as_str().starts_with("urn:openmtr:error:"));
+        assert!(
+            error_types::network()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::timeout()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::auth()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::validation()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::config()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::not_found()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::api()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::not_supported()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
+        assert!(
+            error_types::internal()
+                .as_str()
+                .starts_with("urn:openmtr:error:")
+        );
     }
 
     #[test]
@@ -236,8 +386,8 @@ mod tests {
         let err = OpenMTRError::new(400, "x", "y");
         let s = err.to_string();
         assert!(s.contains("400"));
-        assert!(s.contains("x"));
-        assert!(s.contains("y"));
+        assert!(s.contains('x'));
+        assert!(s.contains('y'));
     }
 
     #[cfg(feature = "native-http")]

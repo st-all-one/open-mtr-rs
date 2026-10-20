@@ -1,9 +1,15 @@
-#![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::return_self_not_must_use, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::indexing_slicing,
+    reason = "adapters legados normalizam números/índices de JSON; a extração tipada entra na revitalização"
+)]
 
 use async_trait::async_trait;
-use futures::future::join_all;
-use serde_json::{json, Value};
-use tracing::{info, info_span, warn};
+use futures::stream::{self, StreamExt};
+use serde_json::{Value, json};
+use tracing::{info, instrument, warn};
 
 use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx, validate_download};
 use crate::openmtr::domain::{
@@ -36,14 +42,15 @@ fn tipo_parte_para_i32(tipo: &TipoParte) -> i32 {
     }
 }
 
-fn filtro_para_json(filtro: &FiltroMtr) -> Value {
-    let (data_inicial, data_final) = if let Some(periodo) = &filtro.periodo { (
-        periodo.inicio.to_string(),
-        periodo.fim.to_string(),
-    ) } else {
-        let hoje = crate::openmtr::time_util::utc_now().date_naive();
+fn filtro_para_json(filtro: &FiltroMtr, hoje: chrono::NaiveDate) -> Value {
+    let (data_inicial, data_final) = if let Some(periodo) = &filtro.periodo {
+        (periodo.inicio.to_string(), periodo.fim.to_string())
+    } else {
         let mes_atras = hoje - chrono::Duration::days(30);
-        (mes_atras.format("%d-%m-%Y").to_string(), hoje.format("%d-%m-%Y").to_string())
+        (
+            mes_atras.format("%d-%m-%Y").to_string(),
+            hoje.format("%d-%m-%Y").to_string(),
+        )
     };
 
     let tipo_parceiro = filtro
@@ -77,7 +84,10 @@ fn lista_manifesto_path(filtro: &FiltroMtr) -> String {
 }
 
 fn json_para_parte(v: &Value) -> Parte {
-    let cnpj_str = v.get("parCnpj").and_then(|c| c.as_str()).unwrap_or_default();
+    let cnpj_str = v
+        .get("parCnpj")
+        .and_then(|c| c.as_str())
+        .unwrap_or_default();
 
     // Tenta parse do CNPJ; se vier null (comum na listagem), usa fallback
     let documento = if cnpj_str.is_empty() || cnpj_str == "00000000000000" {
@@ -89,24 +99,44 @@ fn json_para_parte(v: &Value) -> Parte {
 
     Parte {
         documento,
-        razao_social: v.get("parDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        endereco: v.get("parEndereco").and_then(|s| s.as_str()).map(String::from),
-        municipio: v.get("parCidade").and_then(|s| s.as_str()).map(String::from),
+        razao_social: v
+            .get("parDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        endereco: v
+            .get("parEndereco")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        municipio: v
+            .get("parCidade")
+            .and_then(|s| s.as_str())
+            .map(String::from),
         uf: v.get("parUf").and_then(|s| s.as_str()).map(String::from),
-        unidade: v.get("parCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        unidade: v.get("parCodigo").and_then(Value::as_i64).map(|n| n as u32),
     }
 }
 
 fn json_para_residuo(v: &Value) -> Residuo {
     Residuo {
-        codigo_ibama: v.get("resCodigoIbama").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        descricao: v.get("resDescricao").and_then(|s| s.as_str()).map(String::from),
-        quantidade: v.get("marQuantidade").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
-        unidade: v.get("uniCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        estado_fisico: v.get("tieCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        classe: v.get("claCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        acondicionamento: v.get("tiaCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        tratamento: v.get("traCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
+        codigo_ibama: v
+            .get("resCodigoIbama")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        descricao: v
+            .get("resDescricao")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        quantidade: v
+            .get("marQuantidade")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0),
+        unidade: v.get("uniCodigo").and_then(Value::as_i64).map(|n| n as u32),
+        estado_fisico: v.get("tieCodigo").and_then(Value::as_i64).map(|n| n as u32),
+        classe: v.get("claCodigo").and_then(Value::as_i64).map(|n| n as u32),
+        acondicionamento: v.get("tiaCodigo").and_then(Value::as_i64).map(|n| n as u32),
+        tratamento: v.get("traCodigo").and_then(Value::as_i64).map(|n| n as u32),
         quantidade_recebida: None,
         densidade: None,
         numero_onu: None,
@@ -129,35 +159,75 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
     let classe = v.get("classe");
 
     Residuo {
-        codigo_ibama: res.and_then(|r| r.get("resCodigoIbama")).and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        descricao: res.and_then(|r| r.get("resDescricao")).and_then(|s| s.as_str()).map(String::from),
-        quantidade: v.get("marQuantidade").and_then(serde_json::Value::as_f64).unwrap_or(0.0),
-        unidade: unidade.and_then(|u| u.get("uniCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        estado_fisico: tipo_estado.and_then(|e| e.get("tieCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        classe: classe.and_then(|c| c.get("claCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        acondicionamento: acond.and_then(|a| a.get("tiaCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        tratamento: tratamento.and_then(|t| t.get("traCodigo")).and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(serde_json::Value::as_f64),
-        densidade: v.get("marDensidade").and_then(serde_json::Value::as_f64),
-        numero_onu: v.get("marNumeroONU").and_then(|s| s.as_str()).map(String::from),
-        classe_risco: v.get("marClasseRisco").and_then(|s| s.as_str()).map(String::from),
-        nome_embarque: v.get("marNomeEmbarque").and_then(|s| s.as_str()).map(String::from),
-        grupo_embalagem: v.get("greCodigo").and_then(serde_json::Value::as_i64).map(|n| n as u32),
-        codigo_interno: v.get("codigolinterno").and_then(|s| s.as_str()).map(String::from),
-        descricao_interna: v.get("descricaolnterna").and_then(|s| s.as_str()).map(String::from),
+        codigo_ibama: res
+            .and_then(|r| r.get("resCodigoIbama"))
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        descricao: res
+            .and_then(|r| r.get("resDescricao"))
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        quantidade: v
+            .get("marQuantidade")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0),
+        unidade: unidade
+            .and_then(|u| u.get("uniCodigo"))
+            .and_then(Value::as_i64)
+            .map(|n| n as u32),
+        estado_fisico: tipo_estado
+            .and_then(|e| e.get("tieCodigo"))
+            .and_then(Value::as_i64)
+            .map(|n| n as u32),
+        classe: classe
+            .and_then(|c| c.get("claCodigo"))
+            .and_then(Value::as_i64)
+            .map(|n| n as u32),
+        acondicionamento: acond
+            .and_then(|a| a.get("tiaCodigo"))
+            .and_then(Value::as_i64)
+            .map(|n| n as u32),
+        tratamento: tratamento
+            .and_then(|t| t.get("traCodigo"))
+            .and_then(Value::as_i64)
+            .map(|n| n as u32),
+        quantidade_recebida: v.get("marQuantidadeRecebida").and_then(Value::as_f64),
+        densidade: v.get("marDensidade").and_then(Value::as_f64),
+        numero_onu: v
+            .get("marNumeroONU")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        classe_risco: v
+            .get("marClasseRisco")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        nome_embarque: v
+            .get("marNomeEmbarque")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        grupo_embalagem: v.get("greCodigo").and_then(Value::as_i64).map(|n| n as u32),
+        codigo_interno: v
+            .get("codigolinterno")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        descricao_interna: v
+            .get("descricaolnterna")
+            .and_then(|s| s.as_str())
+            .map(String::from),
     }
 }
 
 fn json_para_mtr_detalhe(v: &Value) -> Mtr {
     let data_criacao = v
         .get("manData")
-        .and_then(serde_json::Value::as_i64)
+        .and_then(Value::as_i64)
         .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
     let data_expedicao = v
         .get("manDataExpedicao")
-        .and_then(serde_json::Value::as_i64)
+        .and_then(Value::as_i64)
         .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
@@ -174,7 +244,11 @@ fn json_para_mtr_detalhe(v: &Value) -> Mtr {
         .unwrap_or_default();
 
     Mtr {
-        numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        numero: v
+            .get("manNumero")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
         barcode: String::new(),
         status: map_status_sinir(status_str),
         gerador: v.get("parceiroGerador").map(json_para_parte),
@@ -199,30 +273,60 @@ fn json_para_mtr_detalhe(v: &Value) -> Mtr {
                     chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok()
                 }
             }),
-        observacao: v.get("manObservacao").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        motorista: v.get("manNomeMotorista").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        placa: v.get("manPlacaVeiculo").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        tipo_manifesto: v.get("tipoManifesto").and_then(serde_json::Value::as_i64).map(|n| n as i32),
-        estado_uf: v.get("estado").and_then(|e| e.get("estAbreviacao")).and_then(|s| s.as_str()).map(String::from),
+        observacao: v
+            .get("manObservacao")
+            .and_then(|s| s.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        motorista: v
+            .get("manNomeMotorista")
+            .and_then(|s| s.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        placa: v
+            .get("manPlacaVeiculo")
+            .and_then(|s| s.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        tipo_manifesto: v
+            .get("tipoManifesto")
+            .and_then(Value::as_i64)
+            .map(|n| n as i32),
+        estado_uf: v
+            .get("estado")
+            .and_then(|e| e.get("estAbreviacao"))
+            .and_then(|s| s.as_str())
+            .map(String::from),
         data_expedicao,
-        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(serde_json::Value::as_bool),
-        hash: v.get("manHashCode").and_then(|s| s.as_str()).map(String::from),
-        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(serde_json::Value::as_bool),
-        numero_estadual: v.get("manNumeroEstadual").and_then(|s| s.as_str()).map(String::from).filter(|s| !s.is_empty()),
-        codigo_estadual: v.get("manCodigoEstadual").and_then(serde_json::Value::as_i64),
+        armazenamento_temporario: v
+            .get("possuiArmazenamentoTemporario")
+            .and_then(Value::as_bool),
+        hash: v
+            .get("manHashCode")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        tem_alteracao_pendente: v
+            .get("temSolicitacaoAlteracaoRecebimento")
+            .and_then(Value::as_bool),
+        numero_estadual: v
+            .get("manNumeroEstadual")
+            .and_then(|s| s.as_str())
+            .map(String::from)
+            .filter(|s| !s.is_empty()),
+        codigo_estadual: v.get("manCodigoEstadual").and_then(Value::as_i64),
     }
 }
 
 fn json_para_mtr(v: &Value) -> Mtr {
     let data_criacao = v
         .get("manData")
-        .and_then(serde_json::Value::as_i64)
+        .and_then(Value::as_i64)
         .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
     let data_expedicao = v
         .get("manDataExpedicao")
-        .and_then(serde_json::Value::as_i64)
+        .and_then(Value::as_i64)
         .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|dt| dt.date_naive());
 
@@ -243,7 +347,11 @@ fn json_para_mtr(v: &Value) -> Mtr {
         .unwrap_or_default();
 
     Mtr {
-        numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        numero: v
+            .get("manNumero")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
         barcode: String::new(),
         status: map_status_sinir(status_str),
         gerador: v.get("parceiroGerador").map(json_para_parte),
@@ -253,17 +361,47 @@ fn json_para_mtr(v: &Value) -> Mtr {
         data_criacao,
         data_recebimento: None,
         // --- GAP 3: campos adicionais ---
-        observacao: v.get("manObservacao").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        motorista: v.get("manNomeMotorista").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        placa: v.get("manPlacaVeiculo").and_then(|s| s.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        tipo_manifesto: v.get("tipoManifesto").and_then(serde_json::Value::as_i64).map(|n| n as i32),
-        estado_uf: v.get("estado").and_then(|e| e.get("estAbreviacao")).and_then(|s| s.as_str()).map(String::from),
+        observacao: v
+            .get("manObservacao")
+            .and_then(|s| s.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        motorista: v
+            .get("manNomeMotorista")
+            .and_then(|s| s.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        placa: v
+            .get("manPlacaVeiculo")
+            .and_then(|s| s.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        tipo_manifesto: v
+            .get("tipoManifesto")
+            .and_then(Value::as_i64)
+            .map(|n| n as i32),
+        estado_uf: v
+            .get("estado")
+            .and_then(|e| e.get("estAbreviacao"))
+            .and_then(|s| s.as_str())
+            .map(String::from),
         data_expedicao,
-        armazenamento_temporario: v.get("possuiArmazenamentoTemporario").and_then(serde_json::Value::as_bool),
-        hash: v.get("manHashCode").and_then(|s| s.as_str()).map(String::from),
-        tem_alteracao_pendente: v.get("temSolicitacaoAlteracaoRecebimento").and_then(serde_json::Value::as_bool),
-        numero_estadual: v.get("manNumeroEstadual").and_then(|s| s.as_str()).map(String::from).filter(|s| !s.is_empty()),
-        codigo_estadual: v.get("manCodigoEstadual").and_then(serde_json::Value::as_i64),
+        armazenamento_temporario: v
+            .get("possuiArmazenamentoTemporario")
+            .and_then(Value::as_bool),
+        hash: v
+            .get("manHashCode")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        tem_alteracao_pendente: v
+            .get("temSolicitacaoAlteracaoRecebimento")
+            .and_then(Value::as_bool),
+        numero_estadual: v
+            .get("manNumeroEstadual")
+            .and_then(|s| s.as_str())
+            .map(String::from)
+            .filter(|s| !s.is_empty()),
+        codigo_estadual: v.get("manCodigoEstadual").and_then(Value::as_i64),
     }
 }
 
@@ -312,12 +450,22 @@ fn criar_mtr_para_json(criar: &CriarMtr) -> Value {
 }
 
 fn json_para_mtr_criado(v: &Value) -> MtrCriado {
-    let valido = v.get("restResponseValido").and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let valido = v
+        .get("restResponseValido")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     MtrCriado {
-        numero: v.get("manifestoNumeroNacional").and_then(|s| s.as_str()).map(String::from),
-        codigo_gerado: v.get("codigoGerado").and_then(serde_json::Value::as_i64),
+        numero: v
+            .get("manifestoNumeroNacional")
+            .and_then(|s| s.as_str())
+            .map(String::from),
+        codigo_gerado: v.get("codigoGerado").and_then(Value::as_i64),
         sucesso: valido,
-        mensagem: v.get("restResponseMensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        mensagem: v
+            .get("restResponseMensagem")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
@@ -338,7 +486,13 @@ fn receber_mtr_para_json(receber: &ReceberMtr) -> Value {
     let residuos = if receber.residuos_recebidos.is_empty() {
         None
     } else {
-        Some(receber.residuos_recebidos.iter().map(residuo_recebido_para_json).collect::<Vec<_>>())
+        Some(
+            receber
+                .residuos_recebidos
+                .iter()
+                .map(residuo_recebido_para_json)
+                .collect::<Vec<_>>(),
+        )
     };
 
     json!({
@@ -352,67 +506,119 @@ fn receber_mtr_para_json(receber: &ReceberMtr) -> Value {
 
 fn json_para_mtr_recebido(v: &Value) -> MtrRecebido {
     MtrRecebido {
-        numero: v.get("manNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        recebido: v.get("recebido").and_then(serde_json::Value::as_bool).unwrap_or(false),
+        numero: v
+            .get("manNumero")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        recebido: v.get("recebido").and_then(Value::as_bool).unwrap_or(false),
         mensagem: v.get("mensagem").and_then(|s| s.as_str()).map(String::from),
     }
 }
 
 fn json_para_acondicionamento(v: &Value) -> Acondicionamento {
     Acondicionamento {
-        codigo: v.get("tiaCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
-        descricao: v.get("tiaDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        codigo: v.get("tiaCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
+        descricao: v
+            .get("tiaDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
 fn json_para_unidade(v: &Value) -> UnidadeMedida {
     UnidadeMedida {
-        codigo: v.get("uniCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
-        descricao: v.get("uniDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        sigla: v.get("uniSigla").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        codigo: v.get("uniCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
+        descricao: v
+            .get("uniDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        sigla: v
+            .get("uniSigla")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
 fn json_para_estado_fisico(v: &Value) -> EstadoFisico {
     EstadoFisico {
-        codigo: v.get("tieCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
-        descricao: v.get("tieDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        codigo: v.get("tieCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
+        descricao: v
+            .get("tieDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
 fn json_para_classe(v: &Value) -> ClasseResiduo {
     ClasseResiduo {
-        codigo: v.get("claCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
-        descricao: v.get("claDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        resolucao: v.get("claResolucao").and_then(|s| s.as_str()).map(String::from),
+        codigo: v.get("claCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
+        descricao: v
+            .get("claDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        resolucao: v
+            .get("claResolucao")
+            .and_then(|s| s.as_str())
+            .map(String::from),
     }
 }
 
 fn json_para_tratamento(v: &Value) -> TratamentoResiduo {
     TratamentoResiduo {
-        codigo: v.get("traCodigo").and_then(serde_json::Value::as_i64).unwrap_or(0) as u32,
-        descricao: v.get("traDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        codigo: v.get("traCodigo").and_then(Value::as_i64).unwrap_or(0) as u32,
+        descricao: v
+            .get("traDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
 fn json_para_residuo_ibama(v: &Value) -> ResiduoIbama {
     ResiduoIbama {
-        codigo_ibama: v.get("resCodigoIbama").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
-        descricao: v.get("resDescricao").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        codigo_ibama: v
+            .get("resCodigoIbama")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        descricao: v
+            .get("resDescricao")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
-fn json_para_cdf_emitido(v: &Value) -> CdfEmitido {
-    let data_emissao = v.get("dataEmissao")
+fn json_para_cdf_emitido(v: &Value, hoje: chrono::NaiveDate) -> CdfEmitido {
+    let data_emissao = v
+        .get("dataEmissao")
         .and_then(|s| s.as_str())
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok())
-        .unwrap_or_else(|| crate::openmtr::time_util::utc_now().date_naive());
+        .unwrap_or(hoje);
 
     CdfEmitido {
-        codigo: v.get("cdfCodigo").and_then(serde_json::Value::as_i64).map(|n| n.to_string()).unwrap_or_default(),
-        numero: v.get("cdfNumero").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        codigo: v
+            .get("cdfCodigo")
+            .and_then(Value::as_i64)
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
+        numero: v
+            .get("cdfNumero")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
         data_emissao,
-        status: v.get("status").and_then(|s| s.as_str()).unwrap_or_default().to_string(),
+        status: v
+            .get("status")
+            .and_then(|s| s.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }
 }
 
@@ -421,7 +627,7 @@ fn extrair_objeto_resposta(v: &Value) -> Option<&Value> {
 }
 
 fn tem_erro(v: &Value) -> bool {
-    v.get("erro").and_then(serde_json::Value::as_bool).unwrap_or(false)
+    v.get("erro").and_then(Value::as_bool).unwrap_or(false)
 }
 
 pub(crate) struct SinirAdapter;
@@ -436,12 +642,9 @@ impl MtrAdapter for SinirAdapter {
         "SINIR Nacional"
     }
 
+    #[instrument(name = "sinir.autenticar_token", skip_all)]
     async fn autenticar_token(&self, ctx: &MtrCtx) -> Result<String, OpenMTRError> {
-        let span = info_span!("sinir.autenticar_token");
-        let _guard = span.enter();
-        let refresh_url = format!("{}/token", ctx.config.base_url);
-        drop(_guard);
-        ctx.http.set_refresh_url(&refresh_url);
+        ctx.http.set_refresh_url(&ctx.config.endpoint("/token"));
 
         // O token do .env é um *refresh token* (tipo apiws-refresh, ~1 ano de
         // validade). O SINIR exige um *access token* (tipo apiws, ~8h) obtido
@@ -464,21 +667,21 @@ impl MtrAdapter for SinirAdapter {
         ))
     }
 
+    #[instrument(name = "sinir.consultar_mtrs", skip_all)]
     async fn consultar_mtrs(
         &self,
         ctx: &MtrCtx,
         filtro: &FiltroMtr,
     ) -> Result<LoteResult<Mtr>, OpenMTRError> {
-        let _span = info_span!("sinir.consultar_mtrs");
-
         // Se há números específicos, usa o endpoint de detalhe
         if let Some(ref nums) = filtro.numeros
-            && !nums.is_empty() {
-                return self.consultar_mtrs_por_numeros(ctx, nums).await;
-            }
+            && !nums.is_empty()
+        {
+            return self.consultar_mtrs_por_numeros(ctx, nums).await;
+        }
 
         // Caso contrário, busca por período + tipo de parceiro (paginação via query string)
-        let body = filtro_para_json(filtro);
+        let body = filtro_para_json(filtro, ctx.today());
         let path = lista_manifesto_path(filtro);
         let response: Value = ctx.http.post(&path, &body, "consultar_mtrs").await?;
 
@@ -490,13 +693,18 @@ impl MtrAdapter for SinirAdapter {
             return Ok(LoteResult::from_vec(Vec::new()));
         }
 
-        let total_reg = response.get("totalRecords").and_then(serde_json::Value::as_i64);
+        let total_reg = response.get("totalRecords").and_then(Value::as_i64);
 
-        let items = response.get("objetoResposta").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
 
         // Se detalhado, extrai só os números e busca tudo via retornaManifesto
         if filtro.detalhado && !items.is_empty() {
-            let numeros: Vec<String> = items.iter()
+            let numeros: Vec<String> = items
+                .iter()
                 .filter_map(|v| v.get("manNumero").and_then(|s| s.as_str()))
                 .map(String::from)
                 .collect();
@@ -515,13 +723,12 @@ impl MtrAdapter for SinirAdapter {
         }
     }
 
+    #[instrument(name = "sinir.criar_mtrs", skip_all)]
     async fn criar_mtrs(
         &self,
         ctx: &MtrCtx,
         mtrs: Vec<CriarMtr>,
     ) -> Result<LoteResult<MtrCriado>, OpenMTRError> {
-        let _span = info_span!("sinir.criar_mtrs");
-
         let mut itens = Vec::with_capacity(mtrs.len());
 
         for (indice, criar) in mtrs.into_iter().enumerate() {
@@ -532,7 +739,10 @@ impl MtrAdapter for SinirAdapter {
                 .await
             {
                 Ok(resp) => {
-                    let erro_nacional = resp.get("erroNacional").and_then(serde_json::Value::as_bool).unwrap_or(false);
+                    let erro_nacional = resp
+                        .get("erroNacional")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
                     if erro_nacional {
                         let msg = resp
                             .get("mensagemErroNacional")
@@ -545,9 +755,10 @@ impl MtrAdapter for SinirAdapter {
                         continue;
                     }
 
-                    let some_respostas = resp.get("respostaApiwsManifestoDTO")
-                        .and_then(|a| a.as_array())
-                        .cloned()
+                    let some_respostas = resp
+                        .get("respostaApiwsManifestoDTO")
+                        .and_then(Value::as_array)
+                        .map(Vec::as_slice)
                         .unwrap_or_default();
 
                     if some_respostas.is_empty() {
@@ -560,7 +771,7 @@ impl MtrAdapter for SinirAdapter {
                         continue;
                     }
 
-                    for r in &some_respostas {
+                    for r in some_respostas {
                         let criado = json_para_mtr_criado(r);
                         if criado.sucesso {
                             itens.push(ItemResult::Ok(criado));
@@ -586,13 +797,12 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::new(itens))
     }
 
+    #[instrument(name = "sinir.receber_mtrs", skip_all)]
     async fn receber_mtrs(
         &self,
         ctx: &MtrCtx,
         lotes: Vec<ReceberMtr>,
     ) -> Result<LoteResult<MtrRecebido>, OpenMTRError> {
-        let _span = info_span!("sinir.receber_mtrs");
-
         let mut itens = Vec::with_capacity(lotes.len());
 
         for (indice, receber) in lotes.into_iter().enumerate() {
@@ -603,9 +813,10 @@ impl MtrAdapter for SinirAdapter {
                 .await
             {
                 Ok(resp) => {
-                    let some_items = resp.get("objeto")
-                        .and_then(|a| a.as_array())
-                        .cloned()
+                    let some_items = resp
+                        .get("objeto")
+                        .and_then(Value::as_array)
+                        .map(Vec::as_slice)
                         .unwrap_or_default();
 
                     if some_items.is_empty() {
@@ -616,7 +827,7 @@ impl MtrAdapter for SinirAdapter {
                         continue;
                     }
 
-                    for item in &some_items {
+                    for item in some_items {
                         let recebido = json_para_mtr_recebido(item);
                         if recebido.recebido {
                             itens.push(ItemResult::Ok(recebido));
@@ -644,13 +855,12 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::new(itens))
     }
 
+    #[instrument(name = "sinir.cancelar_mtrs", skip_all)]
     async fn cancelar_mtrs(
         &self,
         ctx: &MtrCtx,
         reqs: Vec<CancelarMtr>,
     ) -> Result<LoteResult<MtrCancelado>, OpenMTRError> {
-        let _span = info_span!("sinir.cancelar_mtrs");
-
         let mut itens = Vec::with_capacity(reqs.len());
 
         for (indice, req) in reqs.into_iter().enumerate() {
@@ -662,7 +872,8 @@ impl MtrAdapter for SinirAdapter {
             {
                 Ok(resp) => {
                     if tem_erro(&resp) {
-                        let msg = resp.get("mensagem")
+                        let msg = resp
+                            .get("mensagem")
                             .and_then(|s| s.as_str())
                             .unwrap_or("Erro no cancelamento");
                         itens.push(ItemResult::Erro {
@@ -674,26 +885,31 @@ impl MtrAdapter for SinirAdapter {
 
                     match extrair_objeto_resposta(&resp) {
                         Some(cancel) => {
-                            let status_str = cancel.get("status")
+                            let status_str = cancel
+                                .get("status")
                                 .and_then(|s| s.as_str())
                                 .unwrap_or_default()
                                 .to_lowercase();
                             if status_str == "cancelado" {
                                 itens.push(ItemResult::Ok(MtrCancelado {
-                                    numero: cancel.get("manNumero")
+                                    numero: cancel
+                                        .get("manNumero")
                                         .and_then(|s| s.as_str())
                                         .unwrap_or_default()
                                         .to_string(),
-                                    status: cancel.get("status")
+                                    status: cancel
+                                        .get("status")
                                         .and_then(|s| s.as_str())
                                         .unwrap_or_default()
                                         .to_string(),
-                                    data_cancelamento: cancel.get("dataCancelamento")
+                                    data_cancelamento: cancel
+                                        .get("dataCancelamento")
                                         .and_then(|s| s.as_str())
                                         .map(String::from),
                                 }));
                             } else {
-                                let stat = cancel.get("status")
+                                let stat = cancel
+                                    .get("status")
                                     .and_then(|s| s.as_str())
                                     .unwrap_or("unknown");
                                 itens.push(ItemResult::Erro {
@@ -708,7 +924,9 @@ impl MtrAdapter for SinirAdapter {
                         None => {
                             itens.push(ItemResult::Erro {
                                 indice,
-                                problema: OpenMTRError::validation("Resposta vazia no cancelamento"),
+                                problema: OpenMTRError::validation(
+                                    "Resposta vazia no cancelamento",
+                                ),
                             });
                         }
                     }
@@ -727,20 +945,20 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::new(itens))
     }
 
+    #[instrument(name = "sinir.modificar_mtrs", skip_all)]
     async fn modificar_mtrs(
         &self,
         ctx: &MtrCtx,
         reqs: Vec<ModificarMtr>,
     ) -> Result<LoteResult<MtrModificado>, OpenMTRError> {
-        let _span = info_span!("sinir.modificar_mtrs");
-
         let mut itens = Vec::with_capacity(reqs.len());
 
         for (indice, req) in reqs.into_iter().enumerate() {
             match req.tipo {
                 ModificacaoTipo::Recebimento => {
-                    let justificativa =
-                        req.justificativa.unwrap_or_else(|| "Alteração de recebimento".into());
+                    let justificativa = req
+                        .justificativa
+                        .unwrap_or_else(|| "Alteração de recebimento".into());
                     let novos = req.novos_residuos.unwrap_or_default();
 
                     let body = json!({
@@ -791,12 +1009,12 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::new(itens))
     }
 
+    #[instrument(name = "sinir.aceitar_alteracoes", skip_all)]
     async fn aceitar_alteracoes(
         &self,
         ctx: &MtrCtx,
         reqs: Vec<AceitarAlteracao>,
     ) -> Result<LoteResult<AlteracaoAceita>, OpenMTRError> {
-        let _span = info_span!("sinir.aceitar_alteracoes");
         let mut itens = Vec::with_capacity(reqs.len());
 
         for (indice, req) in reqs.into_iter().enumerate() {
@@ -805,15 +1023,32 @@ impl MtrAdapter for SinirAdapter {
                 "aceite": req.aceitar,
             });
 
-            match ctx.http.post::<Value, _>("/aceiteAlteracaoRecebimento", &body, "aceitar_alteracao").await {
+            match ctx
+                .http
+                .post::<Value, _>("/aceiteAlteracaoRecebimento", &body, "aceitar_alteracao")
+                .await
+            {
                 Ok(resp) => {
                     if tem_erro(&resp) {
-                        let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or("Erro no aceite");
-                        itens.push(ItemResult::Erro { indice, problema: OpenMTRError::validation(msg) });
+                        let msg = resp
+                            .get("mensagem")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("Erro no aceite");
+                        itens.push(ItemResult::Erro {
+                            indice,
+                            problema: OpenMTRError::validation(msg),
+                        });
                         continue;
                     }
-                    let aceita = resp.get("alteracaoAceita").and_then(serde_json::Value::as_bool).unwrap_or(false);
-                    let msg = resp.get("mensagem").and_then(|s| s.as_str()).unwrap_or_default().to_string();
+                    let aceita = resp
+                        .get("alteracaoAceita")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    let msg = resp
+                        .get("mensagem")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or_default()
+                        .to_string();
                     itens.push(ItemResult::Ok(AlteracaoAceita {
                         numero: req.numero,
                         aceita,
@@ -822,7 +1057,10 @@ impl MtrAdapter for SinirAdapter {
                 }
                 Err(e) => {
                     warn!(erro = %e, "Falha ao aceitar alteração no SINIR");
-                    itens.push(ItemResult::Erro { indice, problema: OpenMTRError::api_error(502, e.to_string()) });
+                    itens.push(ItemResult::Erro {
+                        indice,
+                        problema: OpenMTRError::api_error(502, e.to_string()),
+                    });
                 }
             }
         }
@@ -831,17 +1069,16 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::new(itens))
     }
 
+    #[instrument(name = "sinir.download_mtrs", skip_all)]
     async fn download_mtrs(
         &self,
         ctx: &MtrCtx,
         nums: Vec<String>,
     ) -> Result<LoteResult<DownloadItem>, OpenMTRError> {
-        let _span = info_span!("sinir.download_mtrs");
-
-        let mut items = Vec::with_capacity(nums.len());
-
-        let tasks: Vec<_> = nums.into_iter().enumerate().map(|(indice, numero)| {
-            async move {
+        let tasks: Vec<_> = nums
+            .into_iter()
+            .enumerate()
+            .map(|(indice, numero)| async move {
                 let path = format!("/downloadManifesto/{numero}");
                 match ctx.http.post_bytes(&path, "download_mtr").await {
                     Ok(response) => {
@@ -863,22 +1100,24 @@ impl MtrAdapter for SinirAdapter {
                         }
                     }
                 }
-            }
-        }).collect();
+            })
+            .collect();
 
-        items.extend(join_all(tasks).await);
+        let items: Vec<_> = stream::iter(tasks)
+            .buffered(ctx.config.max_concurrency())
+            .collect()
+            .await;
 
         info!(total = %items.len(), "MTRs baixados");
         Ok(LoteResult::new(items))
     }
 
+    #[instrument(name = "sinir.gerar_cdfs", skip_all)]
     async fn gerar_cdfs(
         &self,
         ctx: &MtrCtx,
         reqs: Vec<GerarCdf>,
     ) -> Result<LoteResult<CdfEmitido>, OpenMTRError> {
-        let _span = info_span!("sinir.gerar_cdfs");
-
         let mut itens = Vec::with_capacity(reqs.len());
 
         for (indice, req) in reqs.into_iter().enumerate() {
@@ -897,7 +1136,7 @@ impl MtrAdapter for SinirAdapter {
             {
                 Ok(resp) => match resp.get("objeto") {
                     Some(objeto) => {
-                        itens.push(ItemResult::Ok(json_para_cdf_emitido(objeto)));
+                        itens.push(ItemResult::Ok(json_para_cdf_emitido(objeto, ctx.today())));
                     }
                     None => {
                         itens.push(ItemResult::Erro {
@@ -930,32 +1169,28 @@ impl MtrAdapter for SinirAdapter {
         ))
     }
 
+    #[instrument(name = "sinir.download_cdfs", skip_all)]
     async fn download_cdfs(
         &self,
         ctx: &MtrCtx,
         reqs: Vec<DownloadCdf>,
     ) -> Result<LoteResult<DownloadItem>, OpenMTRError> {
-        let _span = info_span!("sinir.download_cdfs");
-
-        let mut items = Vec::with_capacity(reqs.len());
-
-        let tasks: Vec<_> = reqs.into_iter().enumerate().map(|(indice, req)| {
-            async move {
+        let tasks: Vec<_> = reqs
+            .into_iter()
+            .enumerate()
+            .map(|(indice, req)| async move {
                 let formato_str = match req.formato {
                     FormatoDownload::Pdf => "pdf",
                     FormatoDownload::Xml => "xml",
                 };
-                let path = format!(
-                    "/downloadCertificado/{}?formato={}",
-                    req.codigo, formato_str
-                );
+                let path = format!("/downloadCertificado/{}?formato={formato_str}", req.codigo);
                 match ctx.http.post_bytes(&path, "download_cdf").await {
                     Ok(response) => {
                         if let Some(problema) = validate_download(&response, formato_str) {
                             ItemResult::Erro { indice, problema }
                         } else {
                             ItemResult::Ok(DownloadItem {
-                                filename: format!("{}.{}", req.codigo, formato_str),
+                                filename: format!("{}.{formato_str}", req.codigo),
                                 buffer: response.bytes,
                                 formato: formato_str.into(),
                             })
@@ -969,26 +1204,32 @@ impl MtrAdapter for SinirAdapter {
                         }
                     }
                 }
-            }
-        }).collect();
+            })
+            .collect();
 
-        items.extend(join_all(tasks).await);
+        let items: Vec<_> = stream::iter(tasks)
+            .buffered(ctx.config.max_concurrency())
+            .collect()
+            .await;
 
         info!(total = %items.len(), "CDFs baixados");
         Ok(LoteResult::new(items))
     }
 
+    #[instrument(name = "sinir.listar_residuos", skip_all)]
     async fn listar_residuos(
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<ResiduoIbama>, OpenMTRError> {
-        let _span = info_span!("sinir.listar_residuos");
+        let response: Value = ctx
+            .http
+            .get("/retornaListaResiduo", "listar_residuos")
+            .await?;
 
-        let response: Value = ctx.http.get("/retornaListaResiduo", "listar_residuos").await?;
-
-        let items = response.get("objetoResposta")
-            .and_then(|a| a.as_array())
-            .cloned()
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let domain: Vec<ResiduoIbama> = items.iter().map(json_para_residuo_ibama).collect();
 
@@ -996,19 +1237,20 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::from_vec(domain))
     }
 
+    #[instrument(name = "sinir.listar_acondicionamentos", skip_all)]
     async fn listar_acondicionamentos(
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<Acondicionamento>, OpenMTRError> {
-        let _span = info_span!("sinir.listar_acondicionamentos");
-
-        let response: Value = ctx.http
+        let response: Value = ctx
+            .http
             .get("/retornaListaAcondicionamento", "listar_acondicionamentos")
             .await?;
 
-        let items = response.get("objetoResposta")
-            .and_then(|a| a.as_array())
-            .cloned()
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let domain: Vec<Acondicionamento> = items.iter().map(json_para_acondicionamento).collect();
 
@@ -1016,17 +1258,20 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::from_vec(domain))
     }
 
+    #[instrument(name = "sinir.listar_classes", skip_all)]
     async fn listar_classes(
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<ClasseResiduo>, OpenMTRError> {
-        let _span = info_span!("sinir.listar_classes");
+        let response: Value = ctx
+            .http
+            .get("/retornaListaClasse", "listar_classes")
+            .await?;
 
-        let response: Value = ctx.http.get("/retornaListaClasse", "listar_classes").await?;
-
-        let items = response.get("objetoResposta")
-            .and_then(|a| a.as_array())
-            .cloned()
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let domain: Vec<ClasseResiduo> = items.iter().map(json_para_classe).collect();
 
@@ -1034,19 +1279,20 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::from_vec(domain))
     }
 
+    #[instrument(name = "sinir.listar_estados_fisicos", skip_all)]
     async fn listar_estados_fisicos(
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<EstadoFisico>, OpenMTRError> {
-        let _span = info_span!("sinir.listar_estados_fisicos");
-
-        let response: Value = ctx.http
+        let response: Value = ctx
+            .http
             .get("/retornaListaEstadoFisico", "listar_estados_fisicos")
             .await?;
 
-        let items = response.get("objetoResposta")
-            .and_then(|a| a.as_array())
-            .cloned()
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let domain: Vec<EstadoFisico> = items.iter().map(json_para_estado_fisico).collect();
 
@@ -1054,19 +1300,20 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::from_vec(domain))
     }
 
+    #[instrument(name = "sinir.listar_tratamentos", skip_all)]
     async fn listar_tratamentos(
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<TratamentoResiduo>, OpenMTRError> {
-        let _span = info_span!("sinir.listar_tratamentos");
-
-        let response: Value = ctx.http
+        let response: Value = ctx
+            .http
             .get("/retornaListaTratamento", "listar_tratamentos")
             .await?;
 
-        let items = response.get("objetoResposta")
-            .and_then(|a| a.as_array())
-            .cloned()
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let domain: Vec<TratamentoResiduo> = items.iter().map(json_para_tratamento).collect();
 
@@ -1074,17 +1321,20 @@ impl MtrAdapter for SinirAdapter {
         Ok(LoteResult::from_vec(domain))
     }
 
+    #[instrument(name = "sinir.listar_unidades", skip_all)]
     async fn listar_unidades(
         &self,
         ctx: &MtrCtx,
     ) -> Result<LoteResult<UnidadeMedida>, OpenMTRError> {
-        let _span = info_span!("sinir.listar_unidades");
+        let response: Value = ctx
+            .http
+            .get("/retornaListaUnidade", "listar_unidades")
+            .await?;
 
-        let response: Value = ctx.http.get("/retornaListaUnidade", "listar_unidades").await?;
-
-        let items = response.get("objetoResposta")
-            .and_then(|a| a.as_array())
-            .cloned()
+        let items = response
+            .get("objetoResposta")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
             .unwrap_or_default();
         let domain: Vec<UnidadeMedida> = items.iter().map(json_para_unidade).collect();
 
@@ -1107,7 +1357,8 @@ impl SinirAdapter {
             match ctx.http.get::<Value>(&path, "consultar_mtr_detalhe").await {
                 Ok(response) => {
                     if tem_erro(&response) {
-                        let msg = response.get("mensagem")
+                        let msg = response
+                            .get("mensagem")
                             .and_then(|s| s.as_str())
                             .unwrap_or("Erro ao consultar MTR");
                         itens.push(ItemResult::Erro {
@@ -1165,7 +1416,10 @@ mod tests {
             tamanho: Some(50),
             ..FiltroMtr::default()
         };
-        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto?page=0&size=50");
+        assert_eq!(
+            lista_manifesto_path(&filtro),
+            "/listaManifesto?page=0&size=50"
+        );
     }
 
     #[test]
@@ -1175,7 +1429,10 @@ mod tests {
             tamanho: Some(50),
             ..FiltroMtr::default()
         };
-        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto?page=100&size=50");
+        assert_eq!(
+            lista_manifesto_path(&filtro),
+            "/listaManifesto?page=100&size=50"
+        );
     }
 
     #[test]
@@ -1184,7 +1441,10 @@ mod tests {
             tamanho: Some(10),
             ..FiltroMtr::default()
         };
-        assert_eq!(lista_manifesto_path(&filtro), "/listaManifesto?page=0&size=10");
+        assert_eq!(
+            lista_manifesto_path(&filtro),
+            "/listaManifesto?page=0&size=10"
+        );
     }
 
     #[test]
@@ -1194,9 +1454,15 @@ mod tests {
             tamanho: Some(50),
             ..FiltroMtr::default()
         };
-        let body = filtro_para_json(&filtro);
+        let body = filtro_para_json(
+            &filtro,
+            chrono::NaiveDate::from_ymd_opt(2026, 6, 1).expect("data de teste"),
+        );
         assert!(body.get("pagina").is_none(), "pagina não deve ir no body");
-        assert!(body.get("tamanhoPagina").is_none(), "tamanhoPagina não deve ir no body");
-        assert_eq!(body.get("tipoParceiro").and_then(serde_json::Value::as_i64), Some(8));
+        assert!(
+            body.get("tamanhoPagina").is_none(),
+            "tamanhoPagina não deve ir no body"
+        );
+        assert_eq!(body.get("tipoParceiro").and_then(Value::as_i64), Some(8));
     }
 }

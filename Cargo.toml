@@ -1,37 +1,174 @@
 [workspace]
-resolver = "2"
+# Edition 2024 usa o resolver v3 por padrão (MSRV-aware); declarado para ficar explícito.
+resolver = "3"
 members = ["core", "napi", "uniffi", "wasm"]
+default-members = ["core"]
 
 [workspace.package]
-edition = "2024"
 version = "0.1.0"
-rust-version = "1.85"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+authors = ["openMTR contributors"]
+description = "Shell unificado, assíncrono e multi-sistema para APIs de MTR"
+repository = "https://github.com/st-all-one/open-mtr-rs"
+homepage = "https://github.com/st-all-one/open-mtr-rs"
+publish = false
 
 [workspace.dependencies]
+# Domínio e serialização
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
-tokio = { version = "1", features = ["sync", "time"] }
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
-tracing = "0.1"
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 base64 = "0.22"
 async-trait = "0.1"
 futures = "0.3"
+tracing = "0.1"
 
-[workspace.lints]
-rust.unsafe_code = "forbid"
-rust.missing_docs = "allow"
+# HTTP nativo (feature `native-http`)
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+tokio = { version = "1", features = ["sync", "time"] }
+
+# HTTP WASM (transporte local no crate `wasm`)
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Window",
+] }
+js-sys = "0.3"
+web-time = "1"
+
+# Bindings
+napi = { version = "2", features = ["async", "serde-json", "napi8"] }
+napi-derive = "2"
+napi-build = "2"
+uniffi = "0.28"
+wasm-bindgen = "0.2"
+
+# Dev / testes
+wiremock = "0.6"
+dotenvy = "0.15"
+criterion = { version = "0.5", features = ["html_reports"] }
+wasm-bindgen-test = "0.3"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "allow"  # dívida da revitalização: subir para "warn" quando a API pública estiver documentada
+unused_qualifications = "deny"
+unused_lifetimes = "deny"
+elided_lifetimes_in_paths = "deny"
+single_use_lifetimes = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+let_underscore_drop = "deny"
+macro_use_extern_crate = "deny"
+meta_variable_misuse = "deny"
+non_ascii_idents = "deny"
+noop_method_call = "deny"
+unused_import_braces = "deny"
+variant_size_differences = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+unused_footnote_definition = "deny"
 
 [workspace.lints.clippy]
+# Grupos (prioridade menor para permitir overrides pontuais).
+all = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+# Restriction curada — o mesmo núcleo de rigor do knudge.
 unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+exit = "deny"
+mem_forget = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "allow"  # dívida: índices/contadores legados; reativar após tipagem
+as_conversions = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"
+cast_possible_wrap = "deny"
+cast_precision_loss = "warn"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+let_underscore_must_use = "deny"
+let_underscore_untyped = "allow"
+absolute_paths = "allow"  # dívida: caminhos verbosos nos adapters; normalizar imports na revitalização
+wildcard_imports = "deny"
+fn_params_excessive_bools = "deny"
+struct_excessive_bools = "deny"
+disallowed_fields = "deny"
+disallowed_macros = "deny"
+disallowed_methods = "deny"
+disallowed_names = "deny"
+disallowed_types = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+allow_attributes_without_reason = "deny"
+
+# Tamanho / performance.
+large_enum_variant = "deny"
+result_large_err = "allow"  # OpenMTRError é o contrato RFC 9457
+large_types_passed_by_value = "warn"
+large_stack_arrays = "deny"
+large_stack_frames = "warn"
+large_futures = "warn"
+
+# Ruidosas: abrimos mão de forma consciente; ver AGENTS.md §Qualidade.
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+implicit_hasher = "allow"
+multiple_crate_versions = "allow"
+min_ident_chars = "allow"
+many_single_char_names = "allow"
+missing_docs_in_private_items = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+allow_attributes = "allow"
+option_if_let_else = "allow"
+significant_drop_tightening = "allow"
+missing_const_for_fn = "allow"
+excessive_nesting = "allow"
+assert_is_empty = "allow"
+needless_pass_by_value = "allow"  # bindings recebem valores FFI por valor
+redundant_pub_crate = "allow"
+return_self_not_must_use = "allow"
+trivially_copy_pass_by_ref = "allow"
+unreadable_literal = "allow"
+trailing_empty_array = "allow"  # macro napi-rs
+doc_markdown = "allow"
 
 [profile.release]
 opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols"
+overflow-checks = true
 panic = "abort"
+
+[profile.dev]
+debug-assertions = true
+overflow-checks = true

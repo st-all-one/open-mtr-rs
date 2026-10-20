@@ -1,6 +1,13 @@
-use open_mtr_core::*;
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_types,
+    clippy::wildcard_imports,
+    reason = "binding napi: macros geram Rc interno e o prelude é reexportado de propósito"
+)]
+
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use open_mtr_core::*;
 
 use base64::Engine as _;
 
@@ -8,7 +15,7 @@ fn convert_resposta<T: serde::Serialize>(resposta: Resposta<T>) -> RespostaJson 
     RespostaJson {
         id: resposta.id.to_string(),
         ok: resposta.ok,
-        status: resposta.status as u32,
+        status: u32::from(resposta.status),
         mensagem: resposta.mensagem,
         dados: resposta
             .dados
@@ -28,7 +35,7 @@ fn convert_download_resposta(resposta: Resposta<DownloadItem>) -> RespostaJson {
     RespostaJson {
         id: resposta.id.to_string(),
         ok: resposta.ok,
-        status: resposta.status as u32,
+        status: u32::from(resposta.status),
         mensagem: resposta.mensagem,
         dados: resposta
             .dados
@@ -49,8 +56,8 @@ fn convert_download_resposta(resposta: Resposta<DownloadItem>) -> RespostaJson {
     }
 }
 
-fn map_err(e: OpenMTRError) -> napi::Error {
-    napi::Error::from_reason(e.to_string())
+fn map_err(e: OpenMTRError) -> Error {
+    Error::from_reason(e.to_string())
 }
 
 /// Obtém o token de autenticação clássica (CPF + senha) para sistemas que o
@@ -61,16 +68,14 @@ fn map_err(e: OpenMTRError) -> napi::Error {
 /// Retorna `{ ok, token }` no campo `dados[0]` do envelope.
 #[napi]
 pub async fn obter_token(system: String, params_json: String) -> Result<String> {
-    let system: open_mtr_core::System = system
-        .parse()
-        .map_err(|e: String| napi::Error::from_reason(e))?;
-    let params: open_mtr_core::AuthParams = serde_json::from_str(&params_json)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-    let token = open_mtr_core::OpenMtrClassicAuth::new(system)
+    let system: System = system.parse().map_err(|e: String| Error::from_reason(e))?;
+    let params: AuthParams =
+        serde_json::from_str(&params_json).map_err(|e| Error::from_reason(e.to_string()))?;
+    let token = OpenMtrClassicAuth::new(system)
         .params(params)
         .build()
         .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        .map_err(|e| Error::from_reason(e.to_string()))?;
     Ok(serde_json::json!({ "ok": true, "token": token }).to_string())
 }
 
@@ -110,18 +115,19 @@ impl OpenMtrClient {
         let base_url = self.base_url.clone();
         self.inner
             .get_or_try_init(|| async move {
-                let parsed: open_mtr_core::System = system
-                    .parse()
-                    .map_err(|e: String| napi::Error::from_reason(e))?;
-                let mut builder =
-                    open_mtr_core::OpenMtrClient::builder().base(parsed).token(token);
+                let parsed: System = system.parse().map_err(|e: String| Error::from_reason(e))?;
+                let mut builder = open_mtr_core::OpenMtrClient::builder()
+                    .base(parsed)
+                    .token(token);
                 if let Some(url) = base_url {
                     builder = builder.base_url(url);
                 }
-                builder.build().await.map_err(|e| napi::Error::from_reason(e.to_string()))
+                builder
+                    .build()
+                    .await
+                    .map_err(|e| Error::from_reason(e.to_string()))
             })
             .await
-            .map_err(|e| e)
     }
 
     // ─── MTR ───────────────────────────────────────────────────────────
@@ -129,8 +135,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn consultar_mtrs(&self, filtro_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let filtro: FiltroMtr = serde_json::from_str(&filtro_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let filtro: FiltroMtr =
+            serde_json::from_str(&filtro_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.consultar_mtrs(&filtro).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -138,8 +144,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn criar_mtrs(&self, mtrs_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let mtrs: Vec<CriarMtr> = serde_json::from_str(&mtrs_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let mtrs: Vec<CriarMtr> =
+            serde_json::from_str(&mtrs_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.criar_mtrs(mtrs).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -147,8 +153,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn receber_mtrs(&self, lotes_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let lotes: Vec<ReceberMtr> = serde_json::from_str(&lotes_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let lotes: Vec<ReceberMtr> =
+            serde_json::from_str(&lotes_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.receber_mtrs(lotes).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -157,7 +163,7 @@ impl OpenMtrClient {
     pub async fn cancelar_mtrs(&self, cancelamentos_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
         let reqs: Vec<CancelarMtr> = serde_json::from_str(&cancelamentos_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.cancelar_mtrs(reqs).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -165,8 +171,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn modificar_mtrs(&self, mods_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let mods: Vec<ModificarMtr> = serde_json::from_str(&mods_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let mods: Vec<ModificarMtr> =
+            serde_json::from_str(&mods_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.modificar_mtrs(mods).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -183,8 +189,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn gerar_cdfs(&self, reqs_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let reqs: Vec<GerarCdf> = serde_json::from_str(&reqs_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let reqs: Vec<GerarCdf> =
+            serde_json::from_str(&reqs_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.gerar_cdfs(reqs).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -192,8 +198,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn consultar_cdfs(&self, filtro_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let filtro: FiltroCdf = serde_json::from_str(&filtro_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let filtro: FiltroCdf =
+            serde_json::from_str(&filtro_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.consultar_cdfs(&filtro).await.map_err(map_err)?;
         Ok(convert_resposta(resposta))
     }
@@ -201,8 +207,8 @@ impl OpenMtrClient {
     #[napi]
     pub async fn download_cdfs(&self, reqs_json: String) -> Result<RespostaJson> {
         let client = self.get_client().await?;
-        let reqs: Vec<DownloadCdf> = serde_json::from_str(&reqs_json)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let reqs: Vec<DownloadCdf> =
+            serde_json::from_str(&reqs_json).map_err(|e| Error::from_reason(e.to_string()))?;
         let resposta = client.download_cdfs(reqs).await.map_err(map_err)?;
         Ok(convert_download_resposta(resposta))
     }

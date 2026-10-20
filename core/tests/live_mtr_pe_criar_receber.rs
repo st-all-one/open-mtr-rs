@@ -1,7 +1,19 @@
-#![allow(clippy::unwrap_used, clippy::pedantic)]
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
 use std::sync::OnceLock;
-use chrono::NaiveDateTime;
 
 static ENV_LOADED: OnceLock<()> = OnceLock::new();
 
@@ -46,10 +58,6 @@ async fn get_token() -> String {
         .unwrap();
     let json: serde_json::Value = resp.json().await.unwrap();
     json["token"].as_str().unwrap().to_string()
-}
-
-fn format_json(v: &serde_json::Value) -> String {
-    serde_json::to_string_pretty(v).unwrap_or_default()
 }
 
 #[tokio::test]
@@ -106,7 +114,10 @@ async fn test_pe_criar_e_receber_mtr() {
     });
 
     println!("\n📤 Request:");
-    println!("{}", serde_json::to_string_pretty(&create_body).unwrap_or_default());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&create_body).unwrap_or_default()
+    );
 
     let create_resp = client()
         .post(format!("{BASE}/salvarManifestoLote"))
@@ -120,7 +131,10 @@ async fn test_pe_criar_e_receber_mtr() {
     let text = create_resp.text().await.unwrap_or_default();
     println!("\n📥 Response (HTTP {status}):");
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-        println!("{}", serde_json::to_string_pretty(&json).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json).unwrap_or_default()
+        );
 
         let dtos = json["manifestoJSONDtos"].as_array();
         if let Some(dtos) = dtos {
@@ -129,7 +143,10 @@ async fn test_pe_criar_e_receber_mtr() {
                 let retorno = dto["retorno"].as_str().unwrap_or("");
                 let retorno_codigo = dto["retornoCodigo"].as_i64().unwrap_or(-1);
 
-                println!("\n   → Código: {:?}, retornoCodigo: {retorno_codigo}", codigo);
+                println!(
+                    "\n   → Código: {:?}, retornoCodigo: {retorno_codigo}",
+                    codigo
+                );
                 println!("   → retorno: {retorno}");
 
                 if retorno_codigo == 0 {
@@ -160,7 +177,10 @@ async fn test_pe_criar_e_receber_mtr() {
                         });
 
                         println!("\n📤 Receive Request:");
-                        println!("{}", serde_json::to_string_pretty(&receive_body).unwrap_or_default());
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&receive_body).unwrap_or_default()
+                        );
 
                         let receive_resp = client()
                             .post(format!("{BASE}/receberManifestoLote"))
@@ -175,7 +195,10 @@ async fn test_pe_criar_e_receber_mtr() {
                         println!("\n📥 Receive Response (HTTP {receive_status}):");
 
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&receive_text) {
-                            println!("{}", serde_json::to_string_pretty(&json).unwrap_or_default());
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&json).unwrap_or_default()
+                            );
                             let r_dtos = json["manifestoRecebimentoJSONs"].as_array();
                             if let Some(r_dtos) = r_dtos {
                                 for r_dto in r_dtos {

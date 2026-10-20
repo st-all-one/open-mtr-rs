@@ -1,12 +1,8 @@
-#![allow(clippy::missing_errors_doc, clippy::return_self_not_must_use)]
-
-use async_trait::async_trait;
 use crate::openmtr::error::OpenMTRError;
+use async_trait::async_trait;
 
 #[cfg(feature = "native-http")]
 pub mod reqwest;
-#[cfg(feature = "wasm-http")]
-pub mod fetch;
 
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
@@ -41,7 +37,8 @@ impl HttpRequest {
     }
 
     pub fn json_body<T: serde::Serialize>(mut self, body: &T) -> Result<Self, OpenMTRError> {
-        self.body = Some(serde_json::to_vec(body).map_err(|e| OpenMTRError::parse_error(e.to_string()))?);
+        self.body =
+            Some(serde_json::to_vec(body).map_err(|e| OpenMTRError::parse_error(e.to_string()))?);
         Ok(self)
     }
 }
@@ -96,11 +93,16 @@ mod tests {
 
     impl MockTransport {
         fn new() -> Self {
-            Self { responses: Mutex::new(Vec::new()) }
+            Self {
+                responses: Mutex::new(Vec::new()),
+            }
         }
 
         fn push(&self, status: u16, body: serde_json::Value) {
-            self.responses.lock().unwrap().push(Ok(MockResponse { status, body }));
+            self.responses
+                .lock()
+                .unwrap()
+                .push(Ok(MockResponse { status, body }));
         }
 
         fn push_error(&self, err: OpenMTRError) {
@@ -120,7 +122,7 @@ mod tests {
                         status: mock.status,
                         body,
                         content_type: Some("application/json".into()),
-                        content_length: Some(len as u64),
+                        content_length: Some(u64::try_from(len).unwrap_or(u64::MAX)),
                     })
                 }
                 Err(e) => Err(e),
@@ -133,7 +135,10 @@ mod tests {
         let mock = MockTransport::new();
         mock.push(200, serde_json::json!({"ok": true}));
 
-        let resp = mock.send(HttpRequest::get("https://test/health")).await.unwrap();
+        let resp = mock
+            .send(HttpRequest::get("https://test/health"))
+            .await
+            .unwrap();
         assert_eq!(resp.status, 200);
         assert!(resp.is_success());
     }
@@ -143,7 +148,10 @@ mod tests {
         let mock = MockTransport::new();
         mock.push_error(OpenMTRError::timeout("timeout"));
 
-        let err = mock.send(HttpRequest::get("https://test/api")).await.unwrap_err();
+        let err = mock
+            .send(HttpRequest::get("https://test/api"))
+            .await
+            .unwrap_err();
         assert!(err.is_timeout());
     }
 
@@ -159,7 +167,8 @@ mod tests {
     #[tokio::test]
     async fn http_request_builder_post_json() {
         let req = HttpRequest::post("https://api.example.com/v1/mtrs")
-            .json_body(&serde_json::json!({"key": "value"})).unwrap();
+            .json_body(&serde_json::json!({"key": "value"}))
+            .unwrap();
         assert_eq!(req.method, "POST");
         assert!(req.body.is_some());
         let body: serde_json::Value = serde_json::from_slice(&req.body.unwrap()).unwrap();
@@ -181,9 +190,41 @@ mod tests {
 
     #[tokio::test]
     async fn http_response_is_success() {
-        assert!(HttpResponse { status: 200, body: vec![], content_type: None, content_length: None }.is_success());
-        assert!(HttpResponse { status: 299, body: vec![], content_type: None, content_length: None }.is_success());
-        assert!(!HttpResponse { status: 400, body: vec![], content_type: None, content_length: None }.is_success());
-        assert!(!HttpResponse { status: 500, body: vec![], content_type: None, content_length: None }.is_success());
+        assert!(
+            HttpResponse {
+                status: 200,
+                body: vec![],
+                content_type: None,
+                content_length: None
+            }
+            .is_success()
+        );
+        assert!(
+            HttpResponse {
+                status: 299,
+                body: vec![],
+                content_type: None,
+                content_length: None
+            }
+            .is_success()
+        );
+        assert!(
+            !HttpResponse {
+                status: 400,
+                body: vec![],
+                content_type: None,
+                content_length: None
+            }
+            .is_success()
+        );
+        assert!(
+            !HttpResponse {
+                status: 500,
+                body: vec![],
+                content_type: None,
+                content_length: None
+            }
+            .is_success()
+        );
     }
 }

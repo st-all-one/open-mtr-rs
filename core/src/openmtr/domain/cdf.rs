@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
-
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 

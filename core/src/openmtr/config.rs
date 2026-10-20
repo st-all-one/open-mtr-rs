@@ -1,6 +1,6 @@
-#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc, clippy::return_self_not_must_use)]
-
 use std::time::Duration;
+
+use url::Url;
 
 use crate::openmtr::domain::newtypes::Cpf;
 use crate::openmtr::system::System;
@@ -13,9 +13,33 @@ pub struct Config {
     pub base_url: String,
     pub integration_token: Option<String>,
     pub timeout: Duration,
-    #[allow(dead_code)]
+    /// Limite de requisições simultâneas usado pelo cliente HTTP.
+    ///
+    /// O nome histórico é `max_rps`; na prática ele limita a concorrência de
+    /// rede para evitar estourar o rate limit das APIs estaduais.
     pub max_rps: u32,
     pub cnpj: Option<String>,
+}
+
+impl Config {
+    /// Monta a URL absoluta de um endpoint, normalizando a barra inicial.
+    #[must_use]
+    pub fn endpoint(&self, path: &str) -> String {
+        if path.is_empty() {
+            return self.base_url.clone();
+        }
+        if path.starts_with('/') {
+            format!("{}{path}", self.base_url)
+        } else {
+            format!("{}/{path}", self.base_url)
+        }
+    }
+
+    /// Limite efetivo de concorrência (nunca zero).
+    #[must_use]
+    pub fn max_concurrency(&self) -> usize {
+        usize::try_from(self.max_rps.max(1)).unwrap_or(1)
+    }
 }
 
 impl Config {
@@ -81,8 +105,22 @@ impl ConfigBuilder {
             .base_url
             .unwrap_or_else(|| self.system.default_base_url().to_string());
 
-        if base_url.is_empty() {
+        if base_url.trim().is_empty() {
             return Err(OpenMTRError::config("base_url cannot be empty"));
+        }
+
+        let parsed = Url::parse(&base_url)
+            .map_err(|e| OpenMTRError::config(format!("base_url inválida: {e}")))?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return Err(OpenMTRError::config(
+                "base_url deve usar o esquema http ou https",
+            ));
+        }
+
+        let base_url = base_url.trim_end_matches('/').to_string();
+
+        if self.max_rps == 0 {
+            return Err(OpenMTRError::config("max_rps deve ser maior que zero"));
         }
 
         let config = Config {
@@ -155,9 +193,37 @@ mod tests {
     }
 
     #[test]
+    fn test_config_builder_rejects_invalid_base_url() {
+        let result = Config::builder().base_url("not-a-url").build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_builder_normalizes_trailing_slash() {
+        let config = Config::builder()
+            .base_url("https://example.com/api/")
+            .build()
+            .expect("config válida");
+        assert_eq!(config.base_url, "https://example.com/api");
+        assert_eq!(config.endpoint("/token"), "https://example.com/api/token");
+        assert_eq!(config.endpoint("token"), "https://example.com/api/token");
+    }
+
+    #[test]
+    fn test_config_builder_rejects_zero_max_rps() {
+        let result = Config::builder().max_rps(0).build();
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_credenciais() {
         let cpf = Cpf::new("12345678909").expect("valid cpf");
-        let cred = Credenciais { cpf: cpf.clone(), senha: "secret".into(), unidade: 1, cnpj: String::new() };
+        let cred = Credenciais {
+            cpf,
+            senha: "secret".into(),
+            unidade: 1,
+            cnpj: String::new(),
+        };
         assert_eq!(cred.cpf.as_str(), "12345678909");
         assert_eq!(cred.senha, "secret");
         assert_eq!(cred.unidade, 1);

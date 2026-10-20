@@ -1,4 +1,17 @@
-#![allow(clippy::unwrap_used, clippy::pedantic)]
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
 use std::sync::OnceLock;
 
@@ -51,7 +64,12 @@ async fn test_sinir_consultar_com_parte_transportador() {
     );
     for m in &resp.dados {
         let obs = m.observacao.clone().unwrap_or_default().replace('\n', " ");
-        println!("  #{} status={:?} obs={}", m.numero, m.status, obs.chars().take(50).collect::<String>());
+        println!(
+            "  #{} status={:?} obs={}",
+            m.numero,
+            m.status,
+            obs.chars().take(50).collect::<String>()
+        );
     }
 
     // Sem parte (tipoParceiro=8 Gerador) — deve retornar 0 ou menos
@@ -68,5 +86,8 @@ async fn test_sinir_consultar_com_parte_transportador() {
         resp2.erros.len()
     );
 
-    assert!(!resp.dados.is_empty(), "deveria retornar MTRs como Transportador");
+    assert!(
+        !resp.dados.is_empty(),
+        "deveria retornar MTRs como Transportador"
+    );
 }

@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -22,21 +20,53 @@ pub struct Resposta<T> {
 impl<T> Resposta<T> {
     #[must_use]
     pub fn sucesso(id: Uuid, dados: Vec<T>) -> Self {
-        Self { id, ok: true, status: 200, mensagem: String::new(), dados, erros: Vec::new(), total: None }
+        Self {
+            id,
+            ok: true,
+            status: 200,
+            mensagem: String::new(),
+            dados,
+            erros: Vec::new(),
+            total: None,
+        }
     }
 
     #[must_use]
     pub fn com_erros(id: Uuid, erros: Vec<OpenMTRError>) -> Self {
-        Self { id, ok: false, status: 400, mensagem: String::new(), dados: Vec::new(), erros, total: None }
+        Self {
+            id,
+            ok: false,
+            status: 400,
+            mensagem: String::new(),
+            dados: Vec::new(),
+            erros,
+            total: None,
+        }
     }
 
     pub fn com_mensagem(id: Uuid, dados: Vec<T>, mensagem: impl Into<String>) -> Self {
-        Self { id, ok: true, status: 200, mensagem: mensagem.into(), dados, erros: Vec::new(), total: None }
+        Self {
+            id,
+            ok: true,
+            status: 200,
+            mensagem: mensagem.into(),
+            dados,
+            erros: Vec::new(),
+            total: None,
+        }
     }
 
     #[must_use]
     pub fn com_total(id: Uuid, dados: Vec<T>, total: i64) -> Self {
-        Self { id, ok: true, status: 200, mensagem: String::new(), dados, erros: Vec::new(), total: Some(total) }
+        Self {
+            id,
+            ok: true,
+            status: 200,
+            mensagem: String::new(),
+            dados,
+            erros: Vec::new(),
+            total: Some(total),
+        }
     }
 
     #[must_use]

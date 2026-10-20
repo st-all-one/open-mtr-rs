@@ -1,10 +1,10 @@
-#![allow(clippy::missing_errors_doc, clippy::return_self_not_must_use)]
-
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, error, info_span};
-use uuid::Uuid;
+use tracing::{Instrument, error, info, info_span};
 
+use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx};
+use crate::openmtr::client::http::MtrHttpClient;
+use crate::openmtr::config::Config;
 use crate::openmtr::domain::{
     AceitarAlteracao, Acondicionamento, AlteracaoAceita, CancelarMtr, Cdf, CdfEmitido,
     ClasseResiduo, CriarMtr, CriarMtrComplementar, DownloadCdf, DownloadItem, EstadoFisico,
@@ -14,10 +14,8 @@ use crate::openmtr::domain::{
 use crate::openmtr::error::OpenMTRError;
 use crate::openmtr::resposta::Resposta;
 use crate::openmtr::system::System;
-use crate::openmtr::config::Config;
-use crate::openmtr::client::http::MtrHttpClient;
+use crate::openmtr::time_util::{Clock, IdGenerator};
 use crate::openmtr::transport::HttpTransport;
-use crate::openmtr::adapters::{ItemResult, LoteResult, MtrAdapter, MtrCtx};
 
 pub type MtrResult<T> = Result<Resposta<T>, OpenMTRError>;
 
@@ -47,98 +45,165 @@ impl OpenMtrClient {
     async fn exec_lote<T>(
         &self,
         op: &str,
-        future: impl std::future::Future<Output = Result<LoteResult<T>, OpenMTRError>>,
+        future: impl Future<Output = Result<LoteResult<T>, OpenMTRError>>,
     ) -> MtrResult<T> {
-        let id = Uuid::now_v7();
-        let _span = info_span!("openmtr", operation = %op, instance = %id, system = %self.ctx.config.system.nome());
+        let id = self.ctx.new_id();
+        let span = info_span!("openmtr", operation = %op, instance = %id, system = %self.ctx.config.system.nome());
 
-        match future.await {
+        match future.instrument(span).await {
             Ok(lote) => {
-                let erros: Vec<OpenMTRError> = lote.erros().into_iter().cloned().collect();
-                let dados: Vec<T> = lote.itens.into_iter().filter_map(|item| match item {
-                    ItemResult::Ok(val) => Some(val),
-                    ItemResult::Erro { .. } => None,
-                }).collect();
+                let LoteResult { itens, total } = lote;
+                let mut dados = Vec::with_capacity(itens.len());
+                let mut erros = Vec::new();
+                for item in itens {
+                    match item {
+                        ItemResult::Ok(valor) => dados.push(valor),
+                        ItemResult::Erro { mut problema, .. } => {
+                            problema.instance = self.ctx.new_id();
+                            erros.push(problema);
+                        }
+                    }
+                }
                 let len = dados.len();
-                let total_reg = lote.total;
-                info!(ok = true, total = len, erros = erros.len(), total_reg, "Operação concluída");
+                let total_reg = total;
+                info!(
+                    ok = true,
+                    total = len,
+                    erros = erros.len(),
+                    total_reg,
+                    "Operação concluída"
+                );
                 let mut resp = if erros.is_empty() {
                     Resposta::com_mensagem(id, dados, "OK")
                 } else {
-                    Resposta { id, ok: true, status: 200, mensagem: "OK".into(), dados, erros, total: None }
+                    Resposta {
+                        id,
+                        ok: true,
+                        status: 200,
+                        mensagem: "OK".into(),
+                        dados,
+                        erros,
+                        total: None,
+                    }
                 };
                 resp.total = total_reg;
                 Ok(resp)
             }
             Err(e) => {
+                let e = self.normalize_error(e);
                 error!(ok = false, error = %e.detail, "Operação falhou");
                 Err(e)
             }
         }
     }
 
+    fn normalize_error(&self, mut error: OpenMTRError) -> OpenMTRError {
+        error.instance = self.ctx.new_id();
+        error
+    }
+
     pub async fn consultar_mtrs(&self, filtro: &FiltroMtr) -> MtrResult<Mtr> {
-        self.exec_lote("consultar_mtrs", self.adapter.consultar_mtrs(&self.ctx, filtro)).await
+        self.exec_lote(
+            "consultar_mtrs",
+            self.adapter.consultar_mtrs(&self.ctx, filtro),
+        )
+        .await
     }
 
     pub async fn criar_mtrs(&self, mtrs: Vec<CriarMtr>) -> MtrResult<MtrCriado> {
-        self.exec_lote("criar_mtrs", self.adapter.criar_mtrs(&self.ctx, mtrs)).await
+        self.exec_lote("criar_mtrs", self.adapter.criar_mtrs(&self.ctx, mtrs))
+            .await
     }
 
     pub async fn receber_mtrs(&self, lotes: Vec<ReceberMtr>) -> MtrResult<MtrRecebido> {
-        self.exec_lote("receber_mtrs", self.adapter.receber_mtrs(&self.ctx, lotes)).await
+        self.exec_lote("receber_mtrs", self.adapter.receber_mtrs(&self.ctx, lotes))
+            .await
     }
 
     pub async fn cancelar_mtrs(&self, reqs: Vec<CancelarMtr>) -> MtrResult<MtrCancelado> {
-        self.exec_lote("cancelar_mtrs", self.adapter.cancelar_mtrs(&self.ctx, reqs)).await
+        self.exec_lote("cancelar_mtrs", self.adapter.cancelar_mtrs(&self.ctx, reqs))
+            .await
     }
 
     pub async fn modificar_mtrs(&self, reqs: Vec<ModificarMtr>) -> MtrResult<MtrModificado> {
-        self.exec_lote("modificar_mtrs", self.adapter.modificar_mtrs(&self.ctx, reqs)).await
+        self.exec_lote(
+            "modificar_mtrs",
+            self.adapter.modificar_mtrs(&self.ctx, reqs),
+        )
+        .await
     }
 
-    pub async fn aceitar_alteracoes(&self, reqs: Vec<AceitarAlteracao>) -> MtrResult<AlteracaoAceita> {
-        self.exec_lote("aceitar_alteracoes", self.adapter.aceitar_alteracoes(&self.ctx, reqs)).await
+    pub async fn aceitar_alteracoes(
+        &self,
+        reqs: Vec<AceitarAlteracao>,
+    ) -> MtrResult<AlteracaoAceita> {
+        self.exec_lote(
+            "aceitar_alteracoes",
+            self.adapter.aceitar_alteracoes(&self.ctx, reqs),
+        )
+        .await
     }
 
     pub async fn download_mtrs(&self, nums: Vec<String>) -> MtrResult<DownloadItem> {
-        self.exec_lote("download_mtrs", self.adapter.download_mtrs(&self.ctx, nums)).await
+        self.exec_lote("download_mtrs", self.adapter.download_mtrs(&self.ctx, nums))
+            .await
     }
 
     pub async fn gerar_cdfs(&self, reqs: Vec<GerarCdf>) -> MtrResult<CdfEmitido> {
-        self.exec_lote("gerar_cdfs", self.adapter.gerar_cdfs(&self.ctx, reqs)).await
+        self.exec_lote("gerar_cdfs", self.adapter.gerar_cdfs(&self.ctx, reqs))
+            .await
     }
 
     pub async fn consultar_cdfs(&self, filtro: &FiltroCdf) -> MtrResult<Cdf> {
-        self.exec_lote("consultar_cdfs", self.adapter.consultar_cdfs(&self.ctx, filtro)).await
+        self.exec_lote(
+            "consultar_cdfs",
+            self.adapter.consultar_cdfs(&self.ctx, filtro),
+        )
+        .await
     }
 
     pub async fn download_cdfs(&self, reqs: Vec<DownloadCdf>) -> MtrResult<DownloadItem> {
-        self.exec_lote("download_cdfs", self.adapter.download_cdfs(&self.ctx, reqs)).await
+        self.exec_lote("download_cdfs", self.adapter.download_cdfs(&self.ctx, reqs))
+            .await
     }
 
     pub async fn listar_residuos(&self) -> MtrResult<ResiduoIbama> {
-        self.exec_lote("listar_residuos", self.adapter.listar_residuos(&self.ctx)).await
+        self.exec_lote("listar_residuos", self.adapter.listar_residuos(&self.ctx))
+            .await
     }
 
     pub async fn listar_acondicionamentos(&self) -> MtrResult<Acondicionamento> {
-        self.exec_lote("listar_acondicionamentos", self.adapter.listar_acondicionamentos(&self.ctx)).await
+        self.exec_lote(
+            "listar_acondicionamentos",
+            self.adapter.listar_acondicionamentos(&self.ctx),
+        )
+        .await
     }
 
     pub async fn listar_classes(&self) -> MtrResult<ClasseResiduo> {
-        self.exec_lote("listar_classes", self.adapter.listar_classes(&self.ctx)).await
+        self.exec_lote("listar_classes", self.adapter.listar_classes(&self.ctx))
+            .await
     }
 
     pub async fn listar_estados_fisicos(&self) -> MtrResult<EstadoFisico> {
-        self.exec_lote("listar_estados_fisicos", self.adapter.listar_estados_fisicos(&self.ctx)).await
+        self.exec_lote(
+            "listar_estados_fisicos",
+            self.adapter.listar_estados_fisicos(&self.ctx),
+        )
+        .await
     }
 
     pub async fn listar_tratamentos(&self) -> MtrResult<TratamentoResiduo> {
-        self.exec_lote("listar_tratamentos", self.adapter.listar_tratamentos(&self.ctx)).await
+        self.exec_lote(
+            "listar_tratamentos",
+            self.adapter.listar_tratamentos(&self.ctx),
+        )
+        .await
     }
 
     pub async fn listar_unidades(&self) -> MtrResult<UnidadeMedida> {
-        self.exec_lote("listar_unidades", self.adapter.listar_unidades(&self.ctx)).await
+        self.exec_lote("listar_unidades", self.adapter.listar_unidades(&self.ctx))
+            .await
     }
 
     // ─── SIGOR-specific ───
@@ -146,15 +211,22 @@ impl OpenMtrClient {
     pub async fn listar_classes_por_residuo(&self, codigo_ibama: &str) -> MtrResult<ClasseResiduo> {
         self.exec_lote(
             "listar_classes_por_residuo",
-            self.adapter.listar_classes_por_residuo(&self.ctx, codigo_ibama),
-        ).await
+            self.adapter
+                .listar_classes_por_residuo(&self.ctx, codigo_ibama),
+        )
+        .await
     }
 
-    pub async fn listar_acondicionamentos_por_estado_fisico(&self, codigo_estado: u32) -> MtrResult<Acondicionamento> {
+    pub async fn listar_acondicionamentos_por_estado_fisico(
+        &self,
+        codigo_estado: u32,
+    ) -> MtrResult<Acondicionamento> {
         self.exec_lote(
             "listar_acondicionamentos_por_estado_fisico",
-            self.adapter.listar_acondicionamentos_por_estado_fisico(&self.ctx, codigo_estado),
-        ).await
+            self.adapter
+                .listar_acondicionamentos_por_estado_fisico(&self.ctx, codigo_estado),
+        )
+        .await
     }
 
     pub async fn consultar_mtr_por_codigo_referencia(
@@ -162,40 +234,36 @@ impl OpenMtrClient {
         unidade: u32,
         codigo: &str,
     ) -> Result<Option<Mtr>, OpenMTRError> {
-        self.adapter.consultar_mtr_por_codigo_referencia(&self.ctx, unidade, codigo).await
+        self.adapter
+            .consultar_mtr_por_codigo_referencia(&self.ctx, unidade, codigo)
+            .await
+            .map_err(|error| self.normalize_error(error))
     }
 
-    pub async fn criar_manifesto_complementar(&self, req: CriarMtrComplementar) -> MtrResult<MtrCriado> {
-        let mut dados = Vec::new();
-        match self.adapter.criar_manifesto_complementar(&self.ctx, req).await {
-            Ok(criado) => {
-                if criado.sucesso {
-                    dados.push(criado);
-                }
-                let id = uuid::Uuid::now_v7();
-                Ok(Resposta {
-                    id,
-                    ok: true,
-                    status: 200,
-                    mensagem: "OK".into(),
-                    dados,
-                    erros: Vec::new(),
-                    total: None,
-                })
-            }
-            Err(e) => {
-                let id = uuid::Uuid::now_v7();
-                Ok(Resposta {
-                    id,
-                    ok: false,
-                    status: e.status,
-                    mensagem: e.detail.clone(),
-                    dados,
-                    erros: vec![OpenMTRError::api_error(e.status, e.detail)],
-                    total: None,
-                })
-            }
+    pub async fn criar_manifesto_complementar(
+        &self,
+        req: CriarMtrComplementar,
+    ) -> MtrResult<MtrCriado> {
+        let criado = self
+            .adapter
+            .criar_manifesto_complementar(&self.ctx, req)
+            .await
+            .map_err(|error| self.normalize_error(error))?;
+
+        if !criado.sucesso {
+            return Err(self.normalize_error(OpenMTRError::validation(criado.mensagem)));
         }
+
+        let id = self.ctx.new_id();
+        Ok(Resposta {
+            id,
+            ok: true,
+            status: 200,
+            mensagem: "OK".into(),
+            dados: vec![criado],
+            erros: Vec::new(),
+            total: None,
+        })
     }
 }
 
@@ -206,6 +274,8 @@ pub struct OpenMtrClientBuilder {
     integration_token: Option<String>,
     timeout: Option<Duration>,
     max_rps: Option<u32>,
+    clock: Option<Arc<dyn Clock>>,
+    id_generator: Option<Arc<dyn IdGenerator>>,
 }
 
 impl OpenMtrClientBuilder {
@@ -237,10 +307,24 @@ impl OpenMtrClientBuilder {
         self
     }
 
+    /// Injeta um relógio determinístico (testes/golden snapshots).
+    #[must_use]
+    pub fn clock(mut self, clock: Arc<dyn Clock>) -> Self {
+        self.clock = Some(clock);
+        self
+    }
+
+    /// Injeta um gerador determinístico de IDs (testes/golden snapshots).
+    #[must_use]
+    pub fn id_generator(mut self, id_generator: Arc<dyn IdGenerator>) -> Self {
+        self.id_generator = Some(id_generator);
+        self
+    }
+
     #[cfg(feature = "native-http")]
     pub async fn build(self) -> Result<OpenMtrClient, OpenMTRError> {
         let transport = crate::openmtr::transport::reqwest::ReqwestTransport::new(
-            self.timeout.map_or(Duration::from_mins(1), |d| d),
+            self.timeout.unwrap_or(Duration::from_mins(1)),
         )?;
         self.build_with_transport(transport).await
     }
@@ -249,9 +333,9 @@ impl OpenMtrClientBuilder {
         self,
         transport: impl HttpTransport + 'static,
     ) -> Result<OpenMtrClient, OpenMTRError> {
-        let system = self.system.ok_or_else(|| {
-            OpenMTRError::config("system é obrigatório — use .base(System::...)")
-        })?;
+        let system = self
+            .system
+            .ok_or_else(|| OpenMTRError::config("system é obrigatório — use .base(System::...)"))?;
 
         let integration_token = self.integration_token.ok_or_else(|| {
             OpenMTRError::config("integration_token é obrigatório — use .token(...)")
@@ -269,13 +353,22 @@ impl OpenMtrClientBuilder {
             .max_rps(self.max_rps.unwrap_or(10))
             .build()?;
 
-        let http = MtrHttpClient::new(config.clone(), transport)?;
+        let http = MtrHttpClient::new(config.clone(), transport);
 
         let adapter = system.adapter()?;
 
-        let ctx = MtrCtx { http, config };
+        let clock = self
+            .clock
+            .unwrap_or_else(|| Arc::new(crate::openmtr::time_util::SystemClock));
+        let id_generator = self
+            .id_generator
+            .unwrap_or_else(|| Arc::new(crate::openmtr::time_util::UuidV7Generator));
+        let ctx = MtrCtx::with_determinism(http, config, clock, id_generator);
 
-        adapter.autenticar_token(&ctx).await?;
+        adapter.autenticar_token(&ctx).await.map_err(|mut error| {
+            error.instance = ctx.new_id();
+            error
+        })?;
 
         info!(
             system = %adapter.nome(),

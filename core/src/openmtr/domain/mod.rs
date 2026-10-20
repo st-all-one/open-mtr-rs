@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
-
 pub mod aceitar_alteracao;
 pub mod cancelamento;
 pub mod cdf;
@@ -14,6 +12,7 @@ pub mod residuo;
 pub mod tabela;
 pub mod tipo;
 
+pub use aceitar_alteracao::{AceitarAlteracao, AlteracaoAceita};
 pub use cancelamento::{CancelarMtr, MtrCancelado};
 pub use cdf::{Cdf, CdfEmitido, FiltroCdf, GerarCdf};
 pub use criacao::{CriarMtr, CriarMtrComplementar, MtrCriado};
@@ -25,10 +24,9 @@ pub use newtypes::{
 };
 pub use parte::Parte;
 pub use recebimento::{MtrRecebido, ReceberMtr};
-pub use aceitar_alteracao::{AceitarAlteracao, AlteracaoAceita};
 pub use residuo::{Residuo, ResiduoCriacao, ResiduoIbama, ResiduoRecebido};
 pub use tabela::{
-    Acondicionamento, ClasseResiduo, EstadoFisico, TratamentoResiduo, UnidadeMedida,
-    COMPATIBILIDADE_ACOND, ESTADOS_FISICOS,
+    Acondicionamento, COMPATIBILIDADE_ACOND, ClasseResiduo, ESTADOS_FISICOS, EstadoFisico,
+    TratamentoResiduo, UnidadeMedida,
 };
 pub use tipo::{FormatoDownload, TipoManifesto, TipoParte};

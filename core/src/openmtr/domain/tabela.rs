@@ -1,7 +1,5 @@
-#![allow(clippy::module_name_repetitions)]
-
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,8 +35,8 @@ pub struct TratamentoResiduo {
     pub descricao: String,
 }
 
-pub static COMPATIBILIDADE_ACOND: LazyLock<HashMap<u32, Vec<u32>>> = LazyLock::new(|| {
-    let mut m = HashMap::new();
+pub static COMPATIBILIDADE_ACOND: LazyLock<BTreeMap<u32, Vec<u32>>> = LazyLock::new(|| {
+    let mut m = BTreeMap::new();
     m.insert(1, vec![1, 2, 3, 6, 8]);
     m.insert(2, vec![2, 5, 9]);
     m.insert(3, vec![2, 5, 6]);
@@ -47,8 +45,8 @@ pub static COMPATIBILIDADE_ACOND: LazyLock<HashMap<u32, Vec<u32>>> = LazyLock::n
     m
 });
 
-pub static ESTADOS_FISICOS: LazyLock<HashMap<u32, &'static str>> = LazyLock::new(|| {
-    let mut m = HashMap::new();
+pub static ESTADOS_FISICOS: LazyLock<BTreeMap<u32, &'static str>> = LazyLock::new(|| {
+    let mut m = BTreeMap::new();
     m.insert(1, "Sólido");
     m.insert(2, "Líquido");
     m.insert(3, "Pastoso");

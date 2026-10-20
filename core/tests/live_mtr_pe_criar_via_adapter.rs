@@ -1,7 +1,20 @@
-#![allow(clippy::unwrap_used, clippy::pedantic)]
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
-use std::sync::OnceLock;
 use open_mtr_core::*;
+use std::sync::OnceLock;
 
 static ENV_LOADED: OnceLock<()> = OnceLock::new();
 
@@ -127,7 +140,10 @@ async fn test_pe_criar_via_adapter() {
     println!("   Gerador:      {}", criar.gerador.documento);
     println!("   Transportador: {}", criar.transportador.documento);
     println!("   Destinador:   {}", criar.destinador.documento);
-    println!("   Resíduo:      {} qtd: {}", criar.residuos[0].codigo_ibama, criar.residuos[0].quantidade);
+    println!(
+        "   Resíduo:      {} qtd: {}",
+        criar.residuos[0].codigo_ibama, criar.residuos[0].quantidade
+    );
 
     // 4. Executa a criação via adapter
     let result = mtr.criar_mtrs(vec![criar]).await;
@@ -135,7 +151,12 @@ async fn test_pe_criar_via_adapter() {
     match result {
         Ok(resp) => {
             println!("\n📥 Resposta do adapter:");
-            println!("   ok: {}, total dados: {}, erros: {}", resp.ok, resp.dados.len(), resp.erros.len());
+            println!(
+                "   ok: {}, total dados: {}, erros: {}",
+                resp.ok,
+                resp.dados.len(),
+                resp.erros.len()
+            );
 
             for m in &resp.dados {
                 println!(
@@ -150,14 +171,17 @@ async fn test_pe_criar_via_adapter() {
                 println!("   ⚠️  Erro: [{}] {}", e.status, e.detail);
             }
 
-            if let Some(m) = resp.dados.first() {
-                if m.sucesso {
-                    println!("\n🎉 MTR criado com sucesso via adapter OpenMTR!");
-                }
+            if let Some(m) = resp.dados.first()
+                && m.sucesso
+            {
+                println!("\n🎉 MTR criado com sucesso via adapter OpenMTR!");
             }
         }
         Err(e) => {
-            println!("\n❌ Erro catastrófico: [{}] {} — {}", e.status, e.title, e.detail);
+            println!(
+                "\n❌ Erro catastrófico: [{}] {} — {}",
+                e.status, e.title, e.detail
+            );
         }
     }
 }

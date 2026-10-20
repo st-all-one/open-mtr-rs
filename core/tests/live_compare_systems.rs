@@ -1,4 +1,17 @@
-#![allow(clippy::unwrap_used, clippy::pedantic)]
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
 use std::sync::OnceLock;
 
@@ -134,17 +147,26 @@ async fn consultar_mtrpe_raw() -> Vec<serde_json::Value> {
 
         let barcodes: Vec<String> = resp["codigos"]
             .as_array()
-            .map(|a| a.iter().filter_map(|c| c.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|c| c.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         if !barcodes.is_empty() {
-            println!("   MTR-PE: {} barcodes encontrados em {inicio} a {fim}", barcodes.len());
+            println!(
+                "   MTR-PE: {} barcodes encontrados em {inicio} a {fim}",
+                barcodes.len()
+            );
 
             let take = barcodes.len().min(3);
             let mut results = Vec::new();
             for b in barcodes.into_iter().take(take) {
                 let mtr: serde_json::Value = client
-                    .post(format!("https://mtr.cprh.pe.gov.br/api/retornaManifesto/{b}"))
+                    .post(format!(
+                        "https://mtr.cprh.pe.gov.br/api/retornaManifesto/{b}"
+                    ))
                     .header("Authorization", format!("Bearer {token}"))
                     .json(&serde_json::json!({}))
                     .send()
@@ -187,7 +209,11 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
 
     let parse_data = |val: &serde_json::Value| -> Option<chrono::NaiveDate> {
         let s = val.as_str().unwrap_or("");
-        if s.is_empty() { None } else { chrono::NaiveDate::parse_from_str(s, "%Y%m%d").ok() }
+        if s.is_empty() {
+            None
+        } else {
+            chrono::NaiveDate::parse_from_str(s, "%Y%m%d").ok()
+        }
     };
 
     let residuos: Vec<open_mtr_core::Residuo> = v["itemManifestoJSONs"]
@@ -225,7 +251,10 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
     };
 
     open_mtr_core::Mtr {
-        numero: v["manifestoCodigo"].as_i64().map(|n| n.to_string()).unwrap_or_default(),
+        numero: v["manifestoCodigo"]
+            .as_i64()
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
         barcode: String::new(),
         status,
         gerador: Some(parte(
@@ -243,9 +272,18 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
         residuos,
         data_criacao: parse_data(&v["manifData"]),
         data_recebimento: parse_data(&v["manifDataRecebimento"]),
-        observacao: v["manifObservacao"].as_str().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        motorista: v["manifTransportadorNomeMotorista"].as_str().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
-        placa: v["manifTransportadorPlacaVeiculo"].as_str().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+        observacao: v["manifObservacao"]
+            .as_str()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        motorista: v["manifTransportadorNomeMotorista"]
+            .as_str()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        placa: v["manifTransportadorPlacaVeiculo"]
+            .as_str()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
         tipo_manifesto: None,
         estado_uf: None,
         data_expedicao: parse_data(&v["manifDataExpedicao"]),
@@ -267,8 +305,14 @@ fn print_mtr(label: &str, m: &open_mtr_core::Mtr) {
     println!("║ data_expedicao: {:?}", m.data_expedicao);
     println!("║ data_recebimento: {:?}", m.data_recebimento);
     println!("║ armaz_temp:     {:?}", m.armazenamento_temporario);
-    println!("║ observacao:     {:?}", m.observacao.as_deref().unwrap_or("—"));
-    println!("║ motorista:      {:?}", m.motorista.as_deref().unwrap_or("—"));
+    println!(
+        "║ observacao:     {:?}",
+        m.observacao.as_deref().unwrap_or("—")
+    );
+    println!(
+        "║ motorista:      {:?}",
+        m.motorista.as_deref().unwrap_or("—")
+    );
     println!("║ placa:          {:?}", m.placa.as_deref().unwrap_or("—"));
     println!("║ hash:           {:?}", m.hash);
     println!("║ tipo_manifesto: {:?}", m.tipo_manifesto);
@@ -277,19 +321,35 @@ fn print_mtr(label: &str, m: &open_mtr_core::Mtr) {
     println!("║ numero_estadual:{:?}", m.numero_estadual);
     println!("║ codigo_estadual:{:?}", m.codigo_estadual);
     if let Some(ref g) = m.gerador {
-        println!("║ gerador:         doc={}, unidade={:?}", g.documento, g.unidade);
+        println!(
+            "║ gerador:         doc={}, unidade={:?}",
+            g.documento, g.unidade
+        );
     }
     if let Some(ref t) = m.transportador {
-        println!("║ transportador:   doc={}, unidade={:?}", t.documento, t.unidade);
+        println!(
+            "║ transportador:   doc={}, unidade={:?}",
+            t.documento, t.unidade
+        );
     }
     if let Some(ref d) = m.destinador {
-        println!("║ destinador:      doc={}, unidade={:?}", d.documento, d.unidade);
+        println!(
+            "║ destinador:      doc={}, unidade={:?}",
+            d.documento, d.unidade
+        );
     }
     println!("║ residuos ({}):", m.residuos.len());
     for (i, r) in m.residuos.iter().enumerate() {
-        println!("║   [{i}] ibama={} qtd={} classe={:?} ef={:?} acond={:?} trat={:?} unid={:?}",
-            r.codigo_ibama, r.quantidade, r.classe, r.estado_fisico,
-            r.acondicionamento, r.tratamento, r.unidade);
+        println!(
+            "║   [{i}] ibama={} qtd={} classe={:?} ef={:?} acond={:?} trat={:?} unid={:?}",
+            r.codigo_ibama,
+            r.quantidade,
+            r.classe,
+            r.estado_fisico,
+            r.acondicionamento,
+            r.tratamento,
+            r.unidade
+        );
     }
     println!("╚═══════════════════════");
 }
@@ -332,24 +392,60 @@ async fn test_compare_sinir_vs_mtrpe() {
     println!("\n═══════════════ MÉTRICAS ═══════════════");
     let filled = |m: &open_mtr_core::Mtr| -> usize {
         let mut count = 0;
-        if !m.numero.is_empty() { count += 1; }
-        if m.gerador.is_some() { count += 1; }
-        if m.transportador.is_some() { count += 1; }
-        if m.destinador.is_some() { count += 1; }
-        if !m.residuos.is_empty() { count += 1; }
-        if m.data_criacao.is_some() { count += 1; }
-        if m.data_recebimento.is_some() { count += 1; }
-        if m.observacao.is_some() { count += 1; }
-        if m.motorista.is_some() { count += 1; }
-        if m.placa.is_some() { count += 1; }
-        if m.tipo_manifesto.is_some() { count += 1; }
-        if m.estado_uf.is_some() { count += 1; }
-        if m.data_expedicao.is_some() { count += 1; }
-        if m.armazenamento_temporario.is_some() { count += 1; }
-        if m.hash.is_some() { count += 1; }
-        if m.tem_alteracao_pendente.is_some() { count += 1; }
-        if m.numero_estadual.is_some() { count += 1; }
-        if m.codigo_estadual.is_some() { count += 1; }
+        if !m.numero.is_empty() {
+            count += 1;
+        }
+        if m.gerador.is_some() {
+            count += 1;
+        }
+        if m.transportador.is_some() {
+            count += 1;
+        }
+        if m.destinador.is_some() {
+            count += 1;
+        }
+        if !m.residuos.is_empty() {
+            count += 1;
+        }
+        if m.data_criacao.is_some() {
+            count += 1;
+        }
+        if m.data_recebimento.is_some() {
+            count += 1;
+        }
+        if m.observacao.is_some() {
+            count += 1;
+        }
+        if m.motorista.is_some() {
+            count += 1;
+        }
+        if m.placa.is_some() {
+            count += 1;
+        }
+        if m.tipo_manifesto.is_some() {
+            count += 1;
+        }
+        if m.estado_uf.is_some() {
+            count += 1;
+        }
+        if m.data_expedicao.is_some() {
+            count += 1;
+        }
+        if m.armazenamento_temporario.is_some() {
+            count += 1;
+        }
+        if m.hash.is_some() {
+            count += 1;
+        }
+        if m.tem_alteracao_pendente.is_some() {
+            count += 1;
+        }
+        if m.numero_estadual.is_some() {
+            count += 1;
+        }
+        if m.codigo_estadual.is_some() {
+            count += 1;
+        }
         count
     };
 

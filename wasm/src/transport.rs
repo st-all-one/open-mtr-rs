@@ -6,28 +6,18 @@ use wasm_bindgen_futures::JsFuture;
 use open_mtr_core::openmtr::error::OpenMTRError;
 use open_mtr_core::openmtr::transport::{HttpRequest, HttpResponse, HttpTransport};
 
-pub struct JsFetchTransport;
+pub(crate) struct JsFetchTransport;
 
+// SAFETY: no ambiente WASM o transporte vive no único thread do runtime JS.
+// Os métodos não compartilham estado mutável entre threads.
 unsafe impl Send for JsFetchTransport {}
+// SAFETY: idem; `JsFetchTransport` é zero-sized e imutável.
 unsafe impl Sync for JsFetchTransport {}
 
 impl JsFetchTransport {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self
     }
-}
-
-fn build_headers_object(req: &HttpRequest) -> Result<js_sys::Object, OpenMTRError> {
-    let array = js_sys::Array::new();
-    for (k, v) in &req.headers {
-        let entry = js_sys::Array::new();
-        entry.push(&k.clone().into());
-        entry.push(&v.clone().into());
-        array.push(&entry);
-    }
-    let headers_init: js_sys::Object = js_sys::Object::new();
-    js_sys::Reflect::set(&headers_init, &"entries".into(), &array).ok();
-    Ok(headers_init)
 }
 
 async fn do_fetch(req: HttpRequest) -> Result<HttpResponse, OpenMTRError> {
@@ -71,11 +61,14 @@ async fn do_fetch(req: HttpRequest) -> Result<HttpResponse, OpenMTRError> {
     let status = js_sys::Reflect::get(&resp, &"status".into())
         .ok()
         .and_then(|v| v.as_f64())
-        .unwrap_or(0.0) as u16;
+        .and_then(|v| v.round().to_string().parse::<u16>().ok())
+        .unwrap_or(0);
 
     let headers_val = js_sys::Reflect::get(&resp, &"headers".into()).ok();
 
-    let content_type = headers_val.as_ref().and_then(|h| extract_header(h, "content-type"));
+    let content_type = headers_val
+        .as_ref()
+        .and_then(|h| extract_header(h, "content-type"));
     let content_length = headers_val
         .as_ref()
         .and_then(|h| extract_header(h, "content-length"))
@@ -118,9 +111,10 @@ impl HttpTransport for JsFetchTransport {
 
         wasm_bindgen_futures::spawn_local(async move {
             let result = do_fetch(req).await;
-            let _ = tx.send(result);
+            drop(tx.send(result));
         });
 
-        rx.await.map_err(|_| OpenMTRError::network("fetch task cancelled"))?
+        rx.await
+            .map_err(|_| OpenMTRError::network("fetch task cancelled"))?
     }
 }

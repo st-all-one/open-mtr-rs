@@ -1,3 +1,18 @@
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
+
 //! Indexação geral de MTRs do MTR-PE (Pernambuco) transportados por uma empresa
 //! transportadora a partir de uma data inicial (padrão 01/01/2026).
 //!
@@ -11,8 +26,6 @@
 //!
 //! Requer o .env na raiz do projeto com:
 //!   MTR_PE_CNPJ, MTR_PE_CPF, MTR_PE_PASSWORD, MTR_PE_UNITY
-
-#![allow(clippy::unwrap_used, clippy::pedantic)]
 
 use std::collections::HashSet;
 use std::sync::OnceLock;

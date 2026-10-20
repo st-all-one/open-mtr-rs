@@ -1,20 +1,29 @@
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
+
 use open_mtr_core::*;
 
 #[tokio::test]
 async fn test_builder_missing_system() {
-    let result = OpenMtrClient::builder()
-        .token("test")
-        .build()
-        .await;
+    let result = OpenMtrClient::builder().token("test").build().await;
     assert!(result.is_err());
 }
 
 #[tokio::test]
 async fn test_builder_missing_token() {
-    let result = OpenMtrClient::builder()
-        .base(System::Sinir)
-        .build()
-        .await;
+    let result = OpenMtrClient::builder().base(System::Sinir).build().await;
     assert!(result.is_err());
 }
 
@@ -39,9 +48,7 @@ fn test_resposta_types() {
     assert_eq!(r.dados.len(), 1);
     assert!(r.erros.is_empty());
 
-    let r2 = Resposta::<String>::com_erros(id, vec![
-        OpenMTRError::validation("erro de teste")
-    ]);
+    let r2 = Resposta::<String>::com_erros(id, vec![OpenMTRError::validation("erro de teste")]);
     assert!(!r2.ok);
     assert!(r2.tem_erros());
 }

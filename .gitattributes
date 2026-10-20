@@ -1,18 +1,53 @@
-* text=auto
+# Normalização global: texto vira LF no índice e no checkout; binários ficam intactos.
+* text=auto eol=lf
 
-*.rs text diff=rust
-*.toml text
-*.md text
-*.json text
-*.yaml text
-*.yml text
-*.sh text eol=lf
-*.py text diff=python
-*.ts text diff=typescript
-*.js text
+# Código, build e scripts: LF explícito.
+*.rs     text eol=lf diff=rust
+*.toml   text eol=lf
+*.md     text eol=lf
+*.json   text eol=lf
+*.jsonl  text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.sh     text eol=lf
+*.py     text eol=lf diff=python
+*.ts     text eol=lf diff=typescript
+*.js     text eol=lf
+Makefile text eol=lf
+Cargo.lock text eol=lf linguist-generated
 
+# Binários: nunca normalizar.
 *.pdf binary
 *.png binary
 *.jpg binary
+*.jpeg binary
+*.gif binary
 *.wasm binary
 *.node binary
+
+# Linguist: Rust domina; docs e dados auxiliares não disputam o percentual.
+.agents/** linguist-documentation
+docs/**    linguist-documentation
+wiki/**    linguist-documentation
+
+# knudge:start
+# Notas canônicas: LF mantém `body_hash`/id estáveis (D06/D95).
+/.knudge/notas/** text eol=lf
+
+# Configuração do projeto: texto normalizado.
+/.knudge/config.toml text eol=lf
+/.knudge/templates.toml text eol=lf
+/.knudge/validators.toml text eol=lf
+
+# Log de eventos: append-only; o `id` do conteúdo torna o union seguro (D26/D28/D31).
+/.knudge/eventos/events*.jsonl text eol=lf merge=union
+
+# Cache vetorial versionado: chave `(body_hash, model)`; union + dedup no loader (D148/D153).
+/.knudge/emb_cache.jsonl text eol=lf merge=union
+
+# Derivado e runtime (reconstruíveis, nunca versionados): sem diff/merge automático.
+/.knudge/.idx/** binary linguist-generated
+/.knudge/cache/** binary linguist-generated
+/.knudge/.locks/** binary linguist-generated
+/.knudge/**/*.tmp binary linguist-generated
+# knudge:end

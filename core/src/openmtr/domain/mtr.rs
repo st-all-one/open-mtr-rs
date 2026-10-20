@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
-
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -25,9 +23,19 @@ impl Periodo {
         Ok(Self { inicio, fim })
     }
 
+    /// Atalho de conveniência relativo ao relógio do sistema.
+    ///
+    /// Para determinismo (golden tests, reprocessamento), prefira
+    /// [`Self::ultimos_dias_em`] com uma data injetada ou um intervalo
+    /// explícito via [`Self::new`].
     #[must_use]
     pub fn ultimos_dias(dias: i64) -> Self {
-        let hoje = crate::openmtr::time_util::utc_now().date_naive();
+        Self::ultimos_dias_em(crate::openmtr::time_util::utc_now().date_naive(), dias)
+    }
+
+    /// Últimos `dias` até `hoje`, sem consultar o relógio global.
+    #[must_use]
+    pub fn ultimos_dias_em(hoje: NaiveDate, dias: i64) -> Self {
         let inicio = hoje - chrono::Duration::days(dias);
         Self {
             inicio: DataMtr(inicio),
@@ -81,6 +89,10 @@ impl<'de> Deserialize<'de> for Periodo {
         #[serde(untagged)]
         enum PeriodoRaw {
             /// Últimos N dias até hoje (atalho usado nos bindings).
+            ///
+            /// A resolução usa o relógio do sistema no momento da
+            /// desserialização. Para saída determinística, envie `dataInicial`
+            /// e `dataFinal` explicitamente ou use `ultimos_dias_em`.
             Dias { dias: i64 },
             /// Intervalo explícito — datas em `dd-MM-yyyy`, ISO 8601
             /// (`new Date()` no JS) ou timestamp em ms.
@@ -93,7 +105,10 @@ impl<'de> Deserialize<'de> for Periodo {
         }
         match PeriodoRaw::deserialize(d)? {
             PeriodoRaw::Dias { dias } => Ok(Self::ultimos_dias(dias)),
-            PeriodoRaw::Intervalo { data_inicial, data_final } => {
+            PeriodoRaw::Intervalo {
+                data_inicial,
+                data_final,
+            } => {
                 let inicio = DataMtr(data_flexivel(&data_inicial).ok_or_else(|| {
                     serde::de::Error::custom(format!(
                         "dataInicial inválida: {data_inicial} (use dd-MM-yyyy, ISO 8601 ou timestamp)"
@@ -170,7 +185,7 @@ pub enum StatusMtr {
     Outro(String),
 }
 
-impl serde::Serialize for StatusMtr {
+impl Serialize for StatusMtr {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -178,7 +193,6 @@ impl serde::Serialize for StatusMtr {
         serializer.serialize_str(&self.to_string())
     }
 }
-
 
 impl fmt::Display for StatusMtr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -230,8 +244,14 @@ mod tests {
         let p: Periodo =
             serde_json::from_str(r#"{"dataInicial":"01-06-2026","dataFinal":"10-08-2026"}"#)
                 .expect("intervalo válido");
-        assert_eq!(p.inicio.0, NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida"));
-        assert_eq!(p.fim.0, NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida"));
+        assert_eq!(
+            p.inicio.0,
+            NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")
+        );
+        assert_eq!(
+            p.fim.0,
+            NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida")
+        );
     }
 
     #[test]
@@ -241,8 +261,14 @@ mod tests {
             r#"{"dataInicial":"2026-06-01T00:00:00.000Z","dataFinal":"2026-08-10T12:30:00.000Z"}"#,
         )
         .expect("ISO 8601 válido");
-        assert_eq!(p.inicio.0, NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida"));
-        assert_eq!(p.fim.0, NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida"));
+        assert_eq!(
+            p.inicio.0,
+            NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")
+        );
+        assert_eq!(
+            p.fim.0,
+            NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida")
+        );
     }
 
     #[test]
@@ -250,16 +276,30 @@ mod tests {
         let p: Periodo =
             serde_json::from_str(r#"{"dataInicial":"2026-06-01","dataFinal":"2026-08-10"}"#)
                 .expect("ISO data simples");
-        assert_eq!(p.inicio.0, NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida"));
-        assert_eq!(p.fim.0, NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida"));
+        assert_eq!(
+            p.inicio.0,
+            NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")
+        );
+        assert_eq!(
+            p.fim.0,
+            NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida")
+        );
     }
 
     #[test]
     fn test_periodo_deserializa_timestamp_ms() {
         let inicio = NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida");
         let fim = NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida");
-        let ts_inicio = inicio.and_hms_opt(0, 0, 0).expect("hora válida").and_utc().timestamp_millis();
-        let ts_fim = fim.and_hms_opt(0, 0, 0).expect("hora válida").and_utc().timestamp_millis();
+        let ts_inicio = inicio
+            .and_hms_opt(0, 0, 0)
+            .expect("hora válida")
+            .and_utc()
+            .timestamp_millis();
+        let ts_fim = fim
+            .and_hms_opt(0, 0, 0)
+            .expect("hora válida")
+            .and_utc()
+            .timestamp_millis();
         let p: Periodo = serde_json::from_str(&format!(
             r#"{{"dataInicial":{ts_inicio},"dataFinal":{ts_fim}}}"#
         ))
@@ -270,9 +310,8 @@ mod tests {
 
     #[test]
     fn test_periodo_deserializa_data_invalida() {
-        let result: Result<Periodo, _> = serde_json::from_str(
-            r#"{"dataInicial":"31-13-2026","dataFinal":"10-08-2026"}"#,
-        );
+        let result: Result<Periodo, _> =
+            serde_json::from_str(r#"{"dataInicial":"31-13-2026","dataFinal":"10-08-2026"}"#);
         assert!(result.is_err(), "data inválida deve falhar");
     }
 
@@ -282,6 +321,17 @@ mod tests {
         let p: Periodo = serde_json::from_str(r#"{"dias":7}"#).expect("atalho dias");
         assert_eq!(p.fim.0, hoje);
         assert_eq!(p.inicio.0, hoje - chrono::Duration::days(7));
+    }
+
+    #[test]
+    fn test_ultimos_dias_em_e_deterministico() {
+        let hoje = NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida");
+        let p = Periodo::ultimos_dias_em(hoje, 7);
+        assert_eq!(p.fim.0, hoje);
+        assert_eq!(
+            p.inicio.0,
+            NaiveDate::from_ymd_opt(2026, 5, 25).expect("data válida")
+        );
     }
 
     #[test]
@@ -305,8 +355,8 @@ mod tests {
 
     #[test]
     fn test_filtro_mtr_aceita_dias() {
-        let f: FiltroMtr = serde_json::from_str(r#"{"periodo":{"dias":7},"tamanho":5}"#)
-            .expect("filtro com dias");
+        let f: FiltroMtr =
+            serde_json::from_str(r#"{"periodo":{"dias":7},"tamanho":5}"#).expect("filtro com dias");
         assert!(f.periodo.is_some());
         assert_eq!(f.tamanho, Some(5));
     }

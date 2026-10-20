@@ -1,7 +1,24 @@
-use open_mtr_core::*;
-use wiremock::{MockServer, Mock, ResponseTemplate, matchers::{method, path}};
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
-pub async fn setup_sinir_server() -> MockServer {
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
+
+pub(crate) async fn setup_sinir_server() -> MockServer {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -15,7 +32,7 @@ pub async fn setup_sinir_server() -> MockServer {
     server
 }
 
-pub async fn create_sinir_client(server: &MockServer) -> open_mtr_core::OpenMtrClient {
+pub(crate) async fn create_sinir_client(server: &MockServer) -> open_mtr_core::OpenMtrClient {
     open_mtr_core::OpenMtrClient::builder()
         .base(open_mtr_core::System::Sinir)
         .base_url(server.uri())
@@ -25,7 +42,7 @@ pub async fn create_sinir_client(server: &MockServer) -> open_mtr_core::OpenMtrC
         .expect("Failed to create OpenMtrClient")
 }
 
-pub fn json_response(status: u16, body: serde_json::Value) -> ResponseTemplate {
+pub(crate) fn json_response(status: u16, body: serde_json::Value) -> ResponseTemplate {
     ResponseTemplate::new(status)
         .insert_header("Content-Type", "application/json")
         .set_body_string(body.to_string())

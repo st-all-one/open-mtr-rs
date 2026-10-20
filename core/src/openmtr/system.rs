@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
-
 use std::fmt;
 
 use crate::openmtr::error::OpenMTRError;
@@ -37,9 +35,10 @@ impl System {
             Self::Sinir => Ok(Box::new(crate::openmtr::adapters::sinir::SinirAdapter)),
             Self::MtrPe => Ok(Box::new(crate::openmtr::adapters::mtr_pe::MtrPeAdapter)),
             Self::Sigor => Ok(Box::new(crate::openmtr::adapters::sigor::SigorAdapter)),
-            other => Err(OpenMTRError::not_supported(
-                &format!("adapter para {} ainda não implementado", other.nome()),
-            )),
+            other => Err(OpenMTRError::not_supported(&format!(
+                "adapter para {} ainda não implementado",
+                other.nome()
+            ))),
         }
     }
 

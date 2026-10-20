@@ -1,22 +1,27 @@
-#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
-
 use crate::openmtr::error::OpenMTRError;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cnpj(String);
 
 impl Cnpj {
+    #[allow(
+        clippy::indexing_slicing,
+        reason = "o comprimento 14 e o conteúdo ASCII numérico são validados no início"
+    )]
     fn validar_digitos(digits: &str) -> bool {
         if digits.len() != 14 || !digits.chars().all(|c| c.is_ascii_digit()) {
             return false;
         }
-        if digits.chars().all(|c| c == digits.chars().next().expect("non-empty string")) {
+        let Some(first) = digits.chars().next() else {
+            return false;
+        };
+        if digits.chars().all(|c| c == first) {
             return false;
         }
-        let nums: Vec<u32> = digits.chars().map(|c| c.to_digit(10).expect("ascii digit")).collect();
+        let nums: Vec<u32> = digits.chars().filter_map(|c| c.to_digit(10)).collect();
 
         let pesos1: [u32; 12] = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
         let soma1: u32 = nums[..12]
@@ -64,11 +69,11 @@ impl fmt::Display for Cnpj {
         write!(
             f,
             "{}.{}.{}/{}-{}",
-            &self.0[..2],
-            &self.0[2..5],
-            &self.0[5..8],
-            &self.0[8..12],
-            &self.0[12..]
+            self.0.get(..2).unwrap_or_default(),
+            self.0.get(2..5).unwrap_or_default(),
+            self.0.get(5..8).unwrap_or_default(),
+            self.0.get(8..12).unwrap_or_default(),
+            self.0.get(12..).unwrap_or_default()
         )
     }
 }
@@ -86,18 +91,25 @@ impl<'de> Deserialize<'de> for Cnpj {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cpf(String);
 
 impl Cpf {
+    #[allow(
+        clippy::indexing_slicing,
+        reason = "o comprimento 11 e o conteúdo ASCII numérico são validados no início"
+    )]
     fn validar_digitos(digits: &str) -> bool {
         if digits.len() != 11 || !digits.chars().all(|c| c.is_ascii_digit()) {
             return false;
         }
-        if digits.chars().all(|c| c == digits.chars().next().expect("non-empty string")) {
+        let Some(first) = digits.chars().next() else {
+            return false;
+        };
+        if digits.chars().all(|c| c == first) {
             return false;
         }
-        let nums: Vec<u32> = digits.chars().map(|c| c.to_digit(10).expect("ascii digit")).collect();
+        let nums: Vec<u32> = digits.chars().filter_map(|c| c.to_digit(10)).collect();
 
         let soma1: u32 = nums[..9]
             .iter()
@@ -143,10 +155,10 @@ impl fmt::Display for Cpf {
         write!(
             f,
             "{}.{}.{}-{}",
-            &self.0[..3],
-            &self.0[3..6],
-            &self.0[6..9],
-            &self.0[9..]
+            self.0.get(..3).unwrap_or_default(),
+            self.0.get(3..6).unwrap_or_default(),
+            self.0.get(6..9).unwrap_or_default(),
+            self.0.get(9..).unwrap_or_default()
         )
     }
 }
@@ -283,27 +295,32 @@ impl<'de> Deserialize<'de> for TimestampMs {
 pub struct Quantidade(f64);
 
 impl Quantidade {
-    pub fn new(valor: f64) -> Result<Self, crate::openmtr::error::OpenMTRError> {
+    pub fn new(valor: f64) -> Result<Self, OpenMTRError> {
         if valor < 0.0 {
-            return Err(crate::openmtr::error::OpenMTRError::validation(
-                format!("Quantidade não pode ser negativa: {valor}"),
-            ));
+            return Err(OpenMTRError::validation(format!(
+                "Quantidade não pode ser negativa: {valor}"
+            )));
         }
         if valor > 1_000_000_000.0 {
-            return Err(crate::openmtr::error::OpenMTRError::validation(
-                format!("Quantidade acima do limite: {valor}"),
-            ));
+            return Err(OpenMTRError::validation(format!(
+                "Quantidade acima do limite: {valor}"
+            )));
         }
         Ok(Self(valor))
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "campo/helper mantido para compatibilidade da API e testes"
+    )]
     pub(crate) fn new_unchecked(valor: f64) -> Self {
         Self(valor)
     }
 
     #[must_use]
-    pub fn get(&self) -> f64 { self.0 }
+    pub fn get(&self) -> f64 {
+        self.0
+    }
 }
 
 impl fmt::Display for Quantidade {
@@ -316,12 +333,12 @@ impl fmt::Display for Quantidade {
 pub struct CodigoIbama(String);
 
 impl CodigoIbama {
-    pub fn new(digits: &str) -> Result<Self, crate::openmtr::error::OpenMTRError> {
+    pub fn new(digits: &str) -> Result<Self, OpenMTRError> {
         let cleaned: String = digits.chars().filter(char::is_ascii_digit).collect();
         if cleaned.len() != 6 && cleaned.len() != 8 {
-            return Err(crate::openmtr::error::OpenMTRError::validation(
-                format!("Código IBAMA deve ter 6 ou 8 dígitos: {digits}"),
-            ));
+            return Err(OpenMTRError::validation(format!(
+                "Código IBAMA deve ter 6 ou 8 dígitos: {digits}"
+            )));
         }
         Ok(Self(cleaned))
     }
@@ -332,7 +349,9 @@ impl CodigoIbama {
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Display for CodigoIbama {
@@ -345,22 +364,25 @@ impl fmt::Display for CodigoIbama {
 pub struct PlacaVeiculo(String);
 
 impl PlacaVeiculo {
-    pub fn new(s: &str) -> Result<Self, crate::openmtr::error::OpenMTRError> {
+    pub fn new(s: &str) -> Result<Self, OpenMTRError> {
         let upper = s.to_uppercase();
         // Aceita formato ABC1D23 (mercosul) ou ABC-1234 (antigo)
         let is_mercosul = upper.len() == 7
             && upper.chars().take(3).all(|c| c.is_ascii_alphabetic())
             && upper.chars().nth(3).is_some_and(|c| c.is_ascii_digit())
-            && upper.chars().nth(4).is_some_and(|c| c.is_ascii_alphabetic())
+            && upper
+                .chars()
+                .nth(4)
+                .is_some_and(|c| c.is_ascii_alphabetic())
             && upper.chars().skip(5).all(|c| c.is_ascii_digit());
         let is_antiga = upper.len() == 8
             && upper.chars().take(3).all(|c| c.is_ascii_alphabetic())
             && upper.chars().nth(3) == Some('-')
             && upper.chars().skip(4).all(|c| c.is_ascii_digit());
         if !is_mercosul && !is_antiga {
-            return Err(crate::openmtr::error::OpenMTRError::validation(
-                format!("Placa inválida: {s} (use ABC1D23 ou ABC-1234)"),
-            ));
+            return Err(OpenMTRError::validation(format!(
+                "Placa inválida: {s} (use ABC1D23 ou ABC-1234)"
+            )));
         }
         Ok(Self(upper))
     }
@@ -371,7 +393,9 @@ impl PlacaVeiculo {
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Display for PlacaVeiculo {

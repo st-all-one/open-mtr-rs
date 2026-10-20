@@ -1,3 +1,18 @@
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
+
 //! Download dos PDFs dos MTRs do MTR-PE listados no índice gerado por
 //! `indexar_mtr_pe.rs`.
 //!
@@ -13,8 +28,6 @@
 //!
 //! Requer o .env na raiz do projeto com:
 //!   MTR_PE_CNPJ, MTR_PE_CPF_USER, MTR_PE_PASSWORD, MTR_PE_UNITY
-
-#![allow(clippy::unwrap_used, clippy::pedantic)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -154,7 +167,10 @@ async fn main() {
                 for item in resp.dados {
                     // item.filename = "{barcode}.pdf"
                     let barcode = item.filename.trim_end_matches(".pdf");
-                    let numero = barcode_para_numero.get(barcode).cloned().unwrap_or_default();
+                    let numero = barcode_para_numero
+                        .get(barcode)
+                        .cloned()
+                        .unwrap_or_default();
                     let caminho = dir.join(format!("{numero}.pdf"));
                     match std::fs::write(&caminho, &item.buffer) {
                         Ok(_) => {

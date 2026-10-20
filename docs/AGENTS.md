@@ -19,7 +19,7 @@ deno run --allow-read --allow-net wasm/examples/main.ts
 
 | Componente | Tecnologia |
 |---|---|
-| Runtime | Rust 1.85+ (edition 2024) |
+| Runtime | Rust 1.99+ (edition 2024) |
 | Async (native) | `tokio` (sync, time) — **opcional**, feature `native-http` |
 | HTTP (native) | `reqwest` 0.12 + `rustls` — **opcional**, feature `native-http` |
 | HTTP (WASM) | `globalThis.fetch()` via `js_sys` — sem `reqwest`, sem `tokio` |

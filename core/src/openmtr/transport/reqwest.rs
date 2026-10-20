@@ -56,15 +56,17 @@ impl HttpTransport for ReqwestTransport {
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
-            .map(std::string::ToString::to_string);
+            .map(ToString::to_string);
         let content_length = resp
             .headers()
             .get(reqwest::header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
-        let body = resp.bytes().await.map(|b| b.to_vec()).map_err(|e| {
-            OpenMTRError::network(e.to_string())
-        })?;
+        let body = resp
+            .bytes()
+            .await
+            .map(|b| b.to_vec())
+            .map_err(|e| OpenMTRError::network(e.to_string()))?;
 
         Ok(HttpResponse {
             status,

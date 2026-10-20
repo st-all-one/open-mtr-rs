@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -14,7 +12,6 @@ pub enum TipoParte {
     Armazenador,
     Outro(String),
 }
-
 
 impl fmt::Display for TipoParte {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc, clippy::return_self_not_must_use)]
-
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -91,10 +89,7 @@ impl OpenMtrClassicAuth {
     /// ).await?;
     /// ```
     #[cfg(feature = "native-http")]
-    pub async fn obter_token(
-        system: System,
-        params: &AuthParams,
-    ) -> Result<String, OpenMTRError> {
+    pub async fn obter_token(system: System, params: &AuthParams) -> Result<String, OpenMTRError> {
         Self::new(system).params(params.clone()).build().await
     }
 
@@ -140,9 +135,9 @@ impl OpenMtrClassicAuth {
         self,
         transport: impl crate::openmtr::transport::HttpTransport + 'static,
     ) -> Result<String, OpenMTRError> {
-        let system = self.system.ok_or_else(|| {
-            OpenMTRError::config("system é obrigatório — use .base(System::...)")
-        })?;
+        let system = self
+            .system
+            .ok_or_else(|| OpenMTRError::config("system é obrigatório — use .base(System::...)"))?;
 
         let params = self.params.ok_or_else(|| {
             OpenMTRError::config("params são obrigatórios — use .params(AuthParams::...)")
@@ -165,9 +160,9 @@ impl OpenMtrClassicAuth {
             .max_rps(10)
             .build()?;
 
-        let http = crate::openmtr::client::http::MtrHttpClient::new(config.clone(), transport)?;
+        let http = crate::openmtr::client::http::MtrHttpClient::new(config.clone(), transport);
 
-        let ctx = crate::openmtr::adapters::MtrCtx { http, config };
+        let ctx = crate::openmtr::adapters::MtrCtx::new(http, config);
 
         adapter.autenticar_credenciais(&ctx, &params).await
     }
@@ -177,15 +172,25 @@ impl OpenMtrClassicAuth {
 pub type OpenMtrAuthBuilder = OpenMtrClassicAuth;
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_macros,
+    clippy::panic,
+    reason = "testes de variante impossível em enum #[non_exhaustive]"
+)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_auth_params_cpf_senha_unidade() {
         let params = AuthParams::cpf_senha_unidade("07800211428", "secret", 3615);
-        #[allow(unreachable_patterns)] // defensivo: enum #[non_exhaustive]
+        #[allow(unreachable_patterns, reason = "defensivo: enum #[non_exhaustive]")]
         match params {
-            AuthParams::CpfSenhaUnidade { cpf, senha, unidade, cnpj } => {
+            AuthParams::CpfSenhaUnidade {
+                cpf,
+                senha,
+                unidade,
+                cnpj,
+            } => {
                 assert_eq!(cpf, "07800211428");
                 assert_eq!(senha, "secret");
                 assert_eq!(unidade, 3615);
@@ -206,7 +211,7 @@ mod tests {
         let json = serde_json::to_string(&params).expect("serialize");
         assert!(json.contains(r#""tipo":"cpf_senha_unidade""#));
         let back: AuthParams = serde_json::from_str(&json).expect("deserialize");
-        #[allow(unreachable_patterns)] // defensivo: enum #[non_exhaustive]
+        #[allow(unreachable_patterns, reason = "defensivo: enum #[non_exhaustive]")]
         match back {
             AuthParams::CpfSenhaUnidade { cnpj, unidade, .. } => {
                 assert_eq!(cnpj.as_deref(), Some("11201870000226"));

@@ -1,20 +1,32 @@
+# cargo-deny — políticas de supply chain do openMTR.
+#
+# Localmente: `cargo deny check` (ou `make deny`). O CI falha em advisory, licença
+# fora da lista, fonte desconhecida ou dependência wildcard.
+#
+# O projeto usa o mesmo padrão de licenciamento do knudge: MIT OR Apache-2.0.
+
 [graph]
 targets = [
     { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
     { triple = "x86_64-apple-darwin" },
     { triple = "aarch64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "wasm32-unknown-unknown" },
 ]
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
-unsound = "deny"
-yanked = "warn"
-notice = "warn"
-ignore = []
+version = 2
+yanked = "deny"
+# Transitivos do UniFFI 0.28 (bincode e paste). Substituir ao atualizar o UniFFI
+# durante a revitalização; até lá, o risco é de build tooling, não de runtime.
+ignore = [
+    "RUSTSEC-2025-0141", # bincode unmaintained (via uniffi_macros)
+    "RUSTSEC-2024-0436", # paste unmaintained (via uniffi_bindgen/uniffi_core)
+]
 
 [licenses]
-unlicensed = "deny"
+version = 2
 allow = [
     "MIT",
     "Apache-2.0",
@@ -22,16 +34,20 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
-    "Zlib",
     "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
     "CC0-1.0",
-    "OpenSSL",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
 ]
-confidence = 0.8
+confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Dependências internas de workspace (path, sem versão de registry) não são wildcards.
+allow-wildcard-paths = true
 deny = []
 skip = []
 skip-tree = []
@@ -39,4 +55,5 @@ skip-tree = []
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []

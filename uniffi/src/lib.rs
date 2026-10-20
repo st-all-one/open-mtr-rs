@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::wildcard_imports,
+    reason = "binding UniFFI: runtime global é inicializado uma vez e o prelude é reexportado"
+)]
+
 uniffi::setup_scaffolding!();
 
 use open_mtr_core::*;
@@ -67,12 +73,10 @@ impl std::error::Error for OpenMtrError {}
 ///
 /// Retorna o token JWT diretamente.
 pub fn obter_token(system: String, params_json: String) -> Result<String, OpenMtrError> {
-    let sys: open_mtr_core::System = system
-        .parse()
-        .map_err(|_: String| OpenMtrError::Config)?;
+    let sys: System = system.parse().map_err(|_: String| OpenMtrError::Config)?;
     let params: AuthParams = parse_json(&params_json)?;
     let token = runtime()
-        .block_on(open_mtr_core::OpenMtrClassicAuth::new(sys).params(params).build())
+        .block_on(OpenMtrClassicAuth::new(sys).params(params).build())
         .map_err(map_error)?;
     Ok(token)
 }
@@ -93,15 +97,14 @@ impl OpenMtrClient {
         token: String,
         base_url: Option<String>,
     ) -> Result<Self, OpenMtrError> {
-        let sys: open_mtr_core::System =
-            system.parse().map_err(|_: String| OpenMtrError::Config)?;
-        let mut builder = open_mtr_core::OpenMtrClient::builder().base(sys).token(token);
+        let sys: System = system.parse().map_err(|_: String| OpenMtrError::Config)?;
+        let mut builder = open_mtr_core::OpenMtrClient::builder()
+            .base(sys)
+            .token(token);
         if let Some(url) = base_url {
             builder = builder.base_url(url);
         }
-        let client = runtime()
-            .block_on(builder.build())
-            .map_err(map_error)?;
+        let client = runtime().block_on(builder.build()).map_err(map_error)?;
         Ok(Self { inner: client })
     }
 
@@ -130,7 +133,10 @@ impl OpenMtrClient {
         numero: String,
         justificativa: String,
     ) -> Result<String, OpenMtrError> {
-        let reqs = vec![CancelarMtr { numero, justificativa }];
+        let reqs = vec![CancelarMtr {
+            numero,
+            justificativa,
+        }];
         let resposta = blk!(self.inner.cancelar_mtrs(reqs));
         to_json(&resposta)
     }
@@ -198,5 +204,3 @@ impl OpenMtrClient {
         to_json(&resposta)
     }
 }
-
-

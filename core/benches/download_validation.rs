@@ -1,4 +1,10 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+#![allow(
+    clippy::as_conversions,
+    clippy::indexing_slicing,
+    reason = "benchmark replica a validação do cliente com dados sintéticos"
+)]
+
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // We need to reference the types. Since RawResponse is pub(crate) in the http module,
 // and benchmarks are separate crates, we recreate minimal types for benchmarking.
@@ -13,10 +19,15 @@ impl BenchRawResponse {
         if let Some(ref ct) = self.content_type {
             let ct_lower = ct.to_lowercase();
             if ct_lower.contains("text/html") || ct_lower.contains("text/plain") {
-                return Err(format!("Content-Type inesperado: {ct} (esperado {expected})"));
+                return Err(format!(
+                    "Content-Type inesperado: {ct} (esperado {expected})"
+                ));
             }
-            if expected == "xml" && !ct_lower.contains("xml") && !ct_lower.contains("octet-stream") {
-                return Err(format!("Content-Type inesperado: {ct} (esperado application/xml)"));
+            if expected == "xml" && !ct_lower.contains("xml") && !ct_lower.contains("octet-stream")
+            {
+                return Err(format!(
+                    "Content-Type inesperado: {ct} (esperado application/xml)"
+                ));
             }
         }
 
@@ -26,13 +37,18 @@ impl BenchRawResponse {
             _ => true,
         };
         if !magic_ok {
-            return Err(format!("Arquivo inválido: magic bytes não correspondem ao formato {expected}"));
+            return Err(format!(
+                "Arquivo inválido: magic bytes não correspondem ao formato {expected}"
+            ));
         }
 
-        if let Some(cl) = self.content_length {
-            if cl != self.bytes.len() as u64 {
-                return Err(format!("Content-Length ({cl}) difere dos bytes recebidos ({})", self.bytes.len()));
-            }
+        if let Some(cl) = self.content_length
+            && cl != u64::try_from(self.bytes.len()).unwrap_or(u64::MAX)
+        {
+            return Err(format!(
+                "Content-Length ({cl}) difere dos bytes recebidos ({})",
+                self.bytes.len()
+            ));
         }
 
         Ok(())
@@ -99,7 +115,8 @@ fn bench_validate_pdf_100kb(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches,
+criterion_group!(
+    benches,
     bench_validate_pdf_10kb,
     bench_validate_pdf_sem_content_type,
     bench_validate_pdf_magic_invalido,

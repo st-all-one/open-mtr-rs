@@ -1,4 +1,17 @@
-#![allow(clippy::unwrap_used, clippy::pedantic)]
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
+)]
 
 use std::sync::OnceLock;
 
@@ -88,7 +101,10 @@ async fn test_live_consultar_ultimos_30_dias() {
 
     match result {
         Ok(resp) => {
-            println!("✅ {} MTRs encontrados nos últimos 30 dias", resp.dados.len());
+            println!(
+                "✅ {} MTRs encontrados nos últimos 30 dias",
+                resp.dados.len()
+            );
             println!("   ok: {}, status: {}", resp.ok, resp.status);
             if resp.tem_erros() {
                 println!("   erros: {:?}", resp.erros);
@@ -102,7 +118,10 @@ async fn test_live_consultar_ultimos_30_dias() {
         Err(e) => {
             // Pode falhar se a API estiver fora do ar — não falha o teste
             eprintln!("⚠️  Consulta falhou (API pode estar fora do ar): {e}");
-            eprintln!("   type={:?}, title={}, status={}", e.r#type, e.title, e.status);
+            eprintln!(
+                "   type={:?}, title={}, status={}",
+                e.r#type, e.title, e.status
+            );
         }
     }
 }
@@ -123,7 +142,8 @@ async fn test_live_consultar_por_periodo() {
             Periodo::new(
                 DataMtr(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
                 DataMtr(chrono::NaiveDate::from_ymd_opt(2025, 3, 1).unwrap()),
-            ).unwrap(),
+            )
+            .unwrap(),
         ),
         parte: Some(FiltroParte {
             tipo: TipoParte::Transportador,
@@ -170,7 +190,9 @@ async fn test_live_consultar_sem_filtro() {
             assert!(resp.ok);
         }
         Err(e) => {
-            eprintln!("⚠️  Consulta sem filtro falhou (esperado para transportadora sem manifesto como gerador): {e}");
+            eprintln!(
+                "⚠️  Consulta sem filtro falhou (esperado para transportadora sem manifesto como gerador): {e}"
+            );
         }
     }
 }
@@ -356,7 +378,9 @@ async fn test_live_consultar_mtr_especifico() {
     };
 
     if mtrs.is_empty() {
-        eprintln!("⚠️  Nenhum MTR encontrado nos últimos 90 dias — pulando teste de consulta específica");
+        eprintln!(
+            "⚠️  Nenhum MTR encontrado nos últimos 90 dias — pulando teste de consulta específica"
+        );
         return;
     }
 
@@ -370,7 +394,10 @@ async fn test_live_consultar_mtr_especifico() {
 
     match client.consultar_mtrs(&filtro).await {
         Ok(resp) => {
-            println!("✅ MTR #{primeiro_numero} consultado: status={:?}", resp.dados.first().map(|m| &m.status));
+            println!(
+                "✅ MTR #{primeiro_numero} consultado: status={:?}",
+                resp.dados.first().map(|m| &m.status)
+            );
             assert!(resp.ok);
             assert!(!resp.dados.is_empty(), "deve retornar o MTR");
             assert_eq!(resp.dados[0].numero, *primeiro_numero);
@@ -411,10 +438,16 @@ async fn test_live_download_mtr_existente() {
 
     match client.download_mtrs(vec![numero.clone()]).await {
         Ok(resp) => {
-            println!("✅ PDF baixado: {} bytes", resp.dados.first().map(|d| d.buffer.len()).unwrap_or(0));
+            println!(
+                "✅ PDF baixado: {} bytes",
+                resp.dados.first().map(|d| d.buffer.len()).unwrap_or(0)
+            );
             assert!(resp.ok);
             if let Some(item) = resp.dados.first() {
-                assert!(!item.buffer.is_empty(), "buffer do PDF não deve estar vazio");
+                assert!(
+                    !item.buffer.is_empty(),
+                    "buffer do PDF não deve estar vazio"
+                );
                 assert_eq!(item.filename, format!("{numero}.pdf"));
                 // Verifica magic bytes do PDF
                 assert!(item.buffer.starts_with(b"%PDF"), "deve começar com %PDF");
@@ -449,12 +482,26 @@ async fn test_live_consultar_mtr_261032125684() {
 
     match &resp {
         Ok(r) => {
-            println!("✅ OpenMTR: ok={}, dados={}, erros={}", r.ok, r.dados.len(), r.erros.len());
+            println!(
+                "✅ OpenMTR: ok={}, dados={}, erros={}",
+                r.ok,
+                r.dados.len(),
+                r.erros.len()
+            );
             for m in &r.dados {
                 println!("   MTR #{} status={:?}", m.numero, m.status);
-                println!("   gerador={:?}", m.gerador.as_ref().map(|p| &p.razao_social));
-                println!("   transportador={:?}", m.transportador.as_ref().map(|p| &p.razao_social));
-                println!("   destinador={:?}", m.destinador.as_ref().map(|p| &p.razao_social));
+                println!(
+                    "   gerador={:?}",
+                    m.gerador.as_ref().map(|p| &p.razao_social)
+                );
+                println!(
+                    "   transportador={:?}",
+                    m.transportador.as_ref().map(|p| &p.razao_social)
+                );
+                println!(
+                    "   destinador={:?}",
+                    m.destinador.as_ref().map(|p| &p.razao_social)
+                );
                 println!("   data_criacao={:?}", m.data_criacao);
                 println!("   residuos={}", m.residuos.len());
             }
@@ -505,12 +552,15 @@ async fn test_live_consultar_mtr_261032125684() {
     let direct_body: serde_json::Value = direct_resp.json().await.expect("direct API parse failed");
 
     let items = direct_body["objetoResposta"].as_array();
-    println!("   Total MTRs retornados: {}", items.map(|a| a.len()).unwrap_or(0));
+    println!(
+        "   Total MTRs retornados: {}",
+        items.map(|a| a.len()).unwrap_or(0)
+    );
 
     let found_direct = items.and_then(|items| {
-        items.iter().find(|m| {
-            m.get("manNumero").and_then(|s| s.as_str()) == Some(mtr_numero)
-        })
+        items
+            .iter()
+            .find(|m| m.get("manNumero").and_then(|s| s.as_str()) == Some(mtr_numero))
     });
 
     match found_direct {
@@ -518,11 +568,25 @@ async fn test_live_consultar_mtr_261032125684() {
             println!("✅ MTR #{mtr_numero} encontrado na API direta");
             println!("   manNumero={}", m["manNumero"].as_str().unwrap_or(""));
             println!("   manData={}", m["manData"].as_i64().unwrap_or(0));
-            println!("   motorista={}", m["manNomeMotorista"].as_str().unwrap_or(""));
+            println!(
+                "   motorista={}",
+                m["manNomeMotorista"].as_str().unwrap_or("")
+            );
             println!("   placa={}", m["manPlacaVeiculo"].as_str().unwrap_or(""));
-            println!("   observacao={}", m["manObservacao"].as_str().unwrap_or(""));
-            println!("   estado={}", m["estado"]["estAbreviacao"].as_str().unwrap_or(""));
-            println!("   situacao={}", m["situacaoManifesto"]["simDescricao"].as_str().unwrap_or(""));
+            println!(
+                "   observacao={}",
+                m["manObservacao"].as_str().unwrap_or("")
+            );
+            println!(
+                "   estado={}",
+                m["estado"]["estAbreviacao"].as_str().unwrap_or("")
+            );
+            println!(
+                "   situacao={}",
+                m["situacaoManifesto"]["simDescricao"]
+                    .as_str()
+                    .unwrap_or("")
+            );
         }
         None => {
             eprintln!("❌ MTR #{mtr_numero} NÃO encontrado na resposta direta");
@@ -541,7 +605,10 @@ async fn test_live_consultar_mtr_261032125684() {
             println!("  ✅ tipo_manifesto={:?}", m.tipo_manifesto);
             println!("  ✅ estado_uf={:?}", m.estado_uf);
             println!("  ✅ data_expedicao={:?}", m.data_expedicao);
-            println!("  ✅ armazenamento_temporario={:?}", m.armazenamento_temporario);
+            println!(
+                "  ✅ armazenamento_temporario={:?}",
+                m.armazenamento_temporario
+            );
             println!("  ✅ residuos={}", m.residuos.len());
         }
 
@@ -588,7 +655,12 @@ async fn test_live_consultar_detalhado() {
                 } else {
                     format!("{} resíduos", m.residuos.len())
                 };
-                println!("   #{} {} | observacao={}", m.numero, resumo, m.observacao.as_deref().unwrap_or("-"));
+                println!(
+                    "   #{} {} | observacao={}",
+                    m.numero,
+                    resumo,
+                    m.observacao.as_deref().unwrap_or("-")
+                );
             }
             assert!(r.ok);
         }
@@ -597,4 +669,3 @@ async fn test_live_consultar_detalhado() {
         }
     }
 }
-
