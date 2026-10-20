@@ -55,3 +55,5 @@
 {"at":1792463111824,"data":{"action":"review"},"id":"evt_01lnk9ul","note_id":"risk_01xbs3yk","op":"task"}
 {"at":1792463115700,"data":{"action":"updated","outcome":"success"},"id":"evt_01ixhkfe","note_id":"epic_013avsgb","op":"outcome"}
 {"at":1792463115700,"data":{"action":"review"},"id":"evt_00nz0l0r","note_id":"epic_013avsgb","op":"task"}
+{"at":1792463512591,"data":{"action":"created"},"id":"evt_0110fxwh","note_id":"decision_01ol0asr","op":"write"}
+{"at":1792463512771,"data":{"action":"created"},"id":"evt_0084yz32","note_id":"risk_00vgp6bc","op":"write"}
