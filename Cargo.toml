@@ -1,7 +1,7 @@
 [workspace]
 # Edition 2024 usa o resolver v3 por padrão (MSRV-aware); declarado para ficar explícito.
 resolver = "3"
-members = ["core", "napi", "uniffi", "wasm"]
+members = ["core", "cli", "napi", "uniffi", "wasm"]
 default-members = ["core"]
 
 [workspace.package]

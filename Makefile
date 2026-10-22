@@ -2,7 +2,7 @@
 
 CARGO ?= cargo
 
-.PHONY: check fmt clippy test build file-length clean deny audit machete typos ci doc napi uniffi python kotlin swift core
+.PHONY: check fmt clippy test build file-length clean deny audit machete typos ci doc napi uniffi python kotlin swift core update-version
 
 ## Portão local: formatação, lints, testes e orçamento de tamanho de arquivo.
 check: fmt clippy test file-length
@@ -63,6 +63,12 @@ typos:
 
 ## Portão do CI: check + extras disponíveis.
 ci: check deny audit machete typos
+
+## Atualiza a versão do workspace: make update-version VERSION=0.2.0
+update-version:
+	@test -n "$(VERSION)" || { echo "uso: make update-version VERSION=0.2.0"; exit 1; }
+	./scripts/bump-version.sh "$(VERSION)"
+	$(CARGO) update -w
 
 doc:
 	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --workspace --no-deps

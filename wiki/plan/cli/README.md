@@ -65,7 +65,8 @@ openmtr batch --file operacoes.jsonl --continue-on-error > resultados.jsonl
 | **CLI-D09** | `dump` é um comando de primeira classe, derivado do `dump.ts`, mas dirigido por contas do config em vez de env vars fixas. |
 | **CLI-D10** | Atualização é `openmtr self update` → script fino → `install.sh` com checksum SHA-256; releases são gerados por tag e matriz de CI. |
 | **CLI-D11** | Nenhum comando de escrita roda implicitamente em todas as contas. `--all-accounts` é inválido para mutações. |
-| **CLI-D12** | Compatibilidade de config é versionada (`config_version = 1`) e migrável por `openmtr config migrate`. |
+| **CLI-D13** | Dump multi-conta deduplica MTRs por chave (`numero`/`barcode`) com prioridade por tipo de acesso da conta: transportadora (0) > destinadora/receptora (1) > geradora (2); `--no-dedup` preserva duplicatas. |
+| **CLI-D14** | `self update` baixa o artefato da release e verifica SHA-256 diretamente em Rust (staging + rename atômico), em vez de executar `install.sh` remotamente; o `install.sh` continua sendo o caminho de bootstrap. |
 
 ## 4. Cadeia de planos
 
@@ -136,3 +137,32 @@ Consulta: `kd task list --scope epic_01k7qz1b`.
 4. Mudou release/instalação? Atualize [`07_distribuicao_ci_cd.md`](07_distribuicao_ci_cd.md) e
    [`08_atualizacao_operacao.md`](08_atualizacao_operacao.md).
 5. Ao iniciar código, crie/feche tarefas no `kd` ancoradas nos arquivos desta pasta.
+
+## 10. Status de implementação
+
+Versão atual do CLI: **0.1.0** (`[workspace.package].version`, herdada por `open-mtr-cli`; `openmtr --version`).
+Release publica assets `openmtr-v<versão>-<target>.{tar.gz,zip}` + `sha256sums.txt`, compilados em
+runners nativos (sem Docker/cross), com portão de tag == Cargo.toml.
+
+Crate `cli/` (`open-mtr-cli`, binário `openmtr`), verificado por `make check` e testes de integração.
+
+| Área | Estado | Evidência |
+|---|---|---|
+| M0 — config, contas, `account list/test`, `config validate` | implementado | `cli/src/config.rs`, `cli/src/account.rs` |
+| M1 — `mtr consultar/criar/receber/cancelar/modificar/aceitar/download`, `cdf consultar/gerar/download`, `ref listar`, `health` | implementado | `cli/src/cli/` |
+| M1 — `--params`, `--params -` (stdin), `--json`, leitura multi-conta | implementado | `cli/src/params.rs` |
+| M2 — dump multi-conta, janelas, JSONL/CSV/residuos.csv/relatório | implementado | `cli/src/dump/`, `cli/tests/dump_pipeline.rs` |
+| M2 — dedup por `access_type` (transportadora 0 > destinadora 1 > geradora 2), `--no-dedup` | implementado | `cli/src/dump/dedup.rs` (testes unitários) |
+| M2 — retomada `--resume`/`--force`, estado atômico | implementado | `cli/src/dump/` |
+| M2 — PDFs com validação `%PDF`, manifesto SHA-256 | implementado | `cli/src/dump/` |
+| M2 — batch JSONL com execução real, `--dry-run`, `--continue-on-error` | implementado | `cli/src/batch.rs`, `cli/tests/batch_test.rs` |
+| M3 — `--fixed-time`, IDs sequenciais, ordenação estável, golden de bytes | implementado | `cli/tests/dump_pipeline.rs` (determinismo) |
+| M3 — config estrito, aviso de segredo inline, checagem de permissão | implementado | `cli/src/config.rs` |
+| M3 — `config migrate` com `--dry-run` e backup datado | implementado | `cli/src/migrate.rs` |
+| M4 — `self version/update` com `--check`/`--dry-run`, checksum e rename atômico | implementado | `cli/src/selfupdate.rs`, `cli/tests/selfupdate_test.rs` |
+| M4 — `install.sh`, workflow de release 6 targets, config de exemplo | implementado (não exercitado em CI local) | `install.sh`, `.github/workflows/release.yml`, `open-mtr-config.example.toml` |
+
+Limitações conhecidas: SIGOR não participa de `dump` por período (conta única → erro `usage`;
+dump misto → conta listada em `skipped`); `ref listar` exige uma conta; extração `.zip` do
+`self update` no Windows ainda não suportada; workflow de release não exercitado localmente.
+

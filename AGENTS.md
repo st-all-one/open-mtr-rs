@@ -36,6 +36,7 @@ make doc       # rustdoc com -D warnings
 
 ```
 core/                 # núcleo puro: domínio, adapters, transporte, cliente HTTP
+cli/                  # binário `openmtr`: adaptador fino, config multi-conta, dump e batch
 napi/                 # binding Node.js (napi-rs)
 uniffi/               # binding Swift/Kotlin/Python (UniFFI)
 wasm/                 # binding Deno/Web (wasm-bindgen)

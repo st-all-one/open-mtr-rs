@@ -1,0 +1,48 @@
+# open-mtr-config.example.toml — exemplo de configuração multi-conta.
+#
+# Copie para open-mtr-config.toml e ajuste. Segredos inline geram aviso;
+# prefira token_env / senha_env e mantenha o arquivo com chmod 600.
+
+config_version = 1
+
+[defaults]
+dump_window_days = 30
+max_concurrency = 10
+timeout_secs = 30
+
+[[accounts]]
+id = "sinir-prod"
+label = "SINIR nacional"
+system = "sinir"
+token_env = "SINIR_TOKEN"
+tags = ["prod"]
+access_type = "transportadora"
+
+[[accounts]]
+id = "mtrpe-empresa"
+label = "MTR-PE empresa"
+system = "mtr_pe"
+cpf = "00000000000"
+senha_env = "MTRPE_SENHA"
+unidade = 1
+cnpj = "00000000000000"
+tags = ["prod", "pe"]
+access_type = "geradora"
+
+[[accounts]]
+id = "mtrpe-transportadora"
+label = "MTR-PE transportadora"
+system = "mtr_pe"
+cpf = "00000000000"
+senha_env = "MTRPE_TRANSPORTADORA_SENHA"
+unidade = 2
+cnpj = "00000000000000"
+tags = ["prod", "pe", "transportadora"]
+access_type = "transportadora"
+
+[[accounts]]
+id = "sigor"
+label = "SIGOR (somente consulta por número)"
+system = "sigor"
+token_env = "SIGOR_TOKEN"
+enabled = false

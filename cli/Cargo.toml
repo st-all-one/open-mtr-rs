@@ -1,0 +1,38 @@
+[package]
+name = "open-mtr-cli"
+homepage.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CLI utilitária multi-conta do openMTR"
+publish = false
+[[bin]]
+name = "openmtr"
+path = "src/main.rs"
+
+[dependencies]
+open-mtr-core = { path = "../core", features = ["native-http"] }
+clap = { version = "4", features = ["derive", "env"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+toml_edit = "0.22"
+thiserror = { workspace = true }
+anyhow = "1"
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+sha2 = "0.10"
+hex = "0.4"
+flate2 = "1"
+tar = "0.4"
+uuid = { workspace = true }
+
+[dev-dependencies]
+wiremock = { workspace = true }
+tempfile = "3"

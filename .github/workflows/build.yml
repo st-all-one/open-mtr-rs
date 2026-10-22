@@ -1,6 +1,8 @@
 name: CI
 
-# Push em qualquer branch + PRs. Release/bindings artefacts ficam fora deste fluxo.
+# Push em qualquer branch + PRs. O release (binários por plataforma) fica no `release.yml`,
+# disparado por tag `v*` — aqui não se compila release.
+
 on:
   push:
     branches: ["**"]
@@ -10,8 +12,11 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
+permissions:
+  contents: read
+
 jobs:
-  quality:
+  check:
     name: fmt + clippy + test + file-length
     runs-on: ubuntu-latest
     steps:
@@ -21,12 +26,14 @@ jobs:
           toolchain: 1.99
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # `cargo test --workspace` já cobre doc-tests.
       - run: make check
       - run: make doc
 
   cross-platform:
-    name: test core (${{ matrix.os }})
+    name: test core+cli (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -37,10 +44,19 @@ jobs:
           toolchain: 1.99
       - uses: Swatinem/rust-cache@v2
       # Testes live se auto-ignoram sem credenciais; wiremock/unitários rodam sempre.
-      - run: cargo test -p open-mtr-core
+      - run: cargo test --locked -p open-mtr-core -p open-mtr-cli
+
+  scripts:
+    name: scripts (sintaxe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh -n install.sh
+      - run: bash -n scripts/bump-version.sh
+      - run: bash -n scripts/package.sh
 
   supply-chain:
-    name: deny + machete + typos
+    name: deny + audit + machete + typos
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +64,9 @@ jobs:
         with:
           toolchain: 1.99
       - uses: Swatinem/rust-cache@v2
-      - run: cargo install cargo-deny cargo-machete --locked
+      - run: cargo install cargo-deny cargo-audit cargo-machete --locked
       - run: cargo deny check
+      # `basic-toml` é unmaintained via wiremock (dev-only); já ignorado no deny.toml.
+      - run: cargo audit --ignore RUSTSEC-2026-0374
       - run: cargo machete
       - uses: crate-ci/typos@master

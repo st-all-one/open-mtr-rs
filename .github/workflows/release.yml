@@ -1,0 +1,191 @@
+# Release — binários otimizados por plataforma, publicados a partir de uma tag `vX.Y.Z`.
+#
+# SEM Docker/cross: cada alvo é compilado no runner nativo da sua arquitetura
+# (Linux x86_64 + Linux ARM64 nativo, macOS arm64 com cross para x86_64,
+# Windows x86_64 com cross para ARM64 via toolchain MSVC).
+#
+# Fluxo: `git tag v0.1.0 && git push origin v0.1.0` → verifica versão → compila a matriz →
+# publica o GitHub Release com os `.tar.gz`/`.zip` + `sha256sums.txt`.
+#
+# Consumido por `install.sh` e por `openmtr self update`
+# (asset `openmtr-<tag>-<target>.{tar.gz,zip}` + `sha256sums.txt`).
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  # Portão da versão: o commit tagueado precisa estar verde e a tag casar com o Cargo.toml.
+  verify:
+    name: verificar versão e testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Portão local (fmt + clippy + test + orçamento de linhas)
+        run: make check
+
+      - name: Tag == versão do workspace
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "workflow_dispatch em '${GITHUB_REF_NAME}': pulando verificação de tag."
+            exit 0
+          fi
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(grep -m1 -E '^version = "[0-9]' Cargo.toml | cut -d'"' -f2)"
+          echo "tag=v${tag}  workspace=${version}"
+          if [[ "${tag}" != "${version}" ]]; then
+            echo "::error::tag v${tag} != versão ${version} do Cargo.toml — ajuste um dos dois."
+            exit 1
+          fi
+
+  # Matriz de binários otimizados (perfil `release`: LTO fat, codegen-units=1, strip).
+  build:
+    name: ${{ matrix.target }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux — musl estático (roda em qualquer distro, glibc ou não).
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            archive: tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            archive: tar.gz
+          # macOS — Apple Silicon nativo + Intel por cross-compile (mesmo SDK).
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          # Windows — MSVC x86_64 nativo + ARM64 por cross-compile.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            archive: zip
+            msvc_arch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      # musl: o Rust moderno já linka estático; musl-tools cobre o cc.
+      - name: Dependências musl (Linux)
+        if: contains(matrix.target, 'linux-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      # Windows ARM64: cross x64→arm64. `amd64_arm64` é host x64 com alvo ARM64.
+      - name: Toolchain MSVC ARM64 (Windows)
+        if: matrix.msvc_arch == 'arm64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm64
+
+      # Diagnóstico: o primeiro `link` do PATH é o que o rustc usa (deve ser o do MSVC).
+      - name: Verificar linker ARM64
+        if: matrix.msvc_arch == 'arm64'
+        shell: pwsh
+        run: |
+          where.exe link
+          where.exe cl
+
+      - name: Build release (otimizado)
+        run: cargo build --release --locked -p open-mtr-cli --target ${{ matrix.target }}
+
+      - name: Empacotar
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          name="openmtr-${tag}-${{ matrix.target }}"
+          staging="dist/${name}"
+          mkdir -p "$staging"
+
+          if [[ "${{ matrix.target }}" == *-pc-windows-* ]]; then
+            cp "target/${{ matrix.target }}/release/openmtr.exe" "$staging/openmtr.exe"
+          else
+            cp "target/${{ matrix.target }}/release/openmtr" "$staging/openmtr"
+            chmod +x "$staging/openmtr"
+          fi
+
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            ( cd "$staging" && 7z a -tzip "../${name}.zip" ./* >/dev/null )
+          else
+            ( cd "$staging" && tar -czf "../${name}.tar.gz" openmtr )
+          fi
+          ls -l "dist/${name}.${{ matrix.archive }}"
+
+      - name: Upload do artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmtr-${{ matrix.target }}
+          path: dist/*.${{ matrix.archive }}
+          retention-days: 1
+
+  # Publica o Release: reúne os artefatos, gera os checksums e anexa tudo.
+  release:
+    name: publicar
+    needs: build
+    # Só publica quando o gatilho é uma tag; `workflow_dispatch` em branch apenas compila.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums SHA-256
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum openmtr-*.* > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/sha256sums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false

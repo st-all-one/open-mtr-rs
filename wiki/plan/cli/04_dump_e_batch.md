@@ -18,6 +18,38 @@ Sistemas suportados:
 
 Contas desabilitadas nunca participam. `dump` sem seletor de conta é erro. Contas do mesmo sistema
 são processadas separadamente e identificadas por `account` na saída.
+## 1a. Deduplicação multi-conta (correção de dump.ts)
+
+O `dump.ts` de referência duplica MTRs que aparecem em mais de uma conta do mesmo sistema (ex.: a
+UBA e a ATR consultam o mesmo manifesto). O CLI **não** deve duplicar: um MTR que apareça em N
+contas é emitido uma única vez, atribuído à conta de maior prioridade de acesso.
+
+Prioridade por **tipo de acesso da conta** (menor número = maior prioridade):
+
+| Prioridade | Tipo de acesso | Rótulo |
+|---:|---|---|
+| 0 | transportadora | `transportadora` |
+| 1 | destinadora/receptora | `destinadora` |
+| 2 | geradora | `geradora` |
+
+Regras:
+
+- A prioridade é derivada da conta, não do MTR: cada `[[accounts]]` declara `access_type`
+  (`transportadora`, `destinadora`, `geradora`); default `geradora` quando ausente.
+- Chave de identidade do MTR para dedup:
+  - SINIR: `numero`;
+  - MTR-PE: `numero` e, se ausente, `barcode`.
+- Na merge final (passo 5 do pipeline), para cada chave presente em mais de uma conta, manter
+  **apenas** o registro da conta de menor prioridade numérica; descartar os demais.
+- O registro descartado não é gravado em `mtrs.jsonl`/CSVs, mas é contado no relatório em
+  `deduplicated[]` (por chave, com `kept_account` e `dropped_accounts[]`).
+- Se duas contas tiverem a mesma prioridade, desempatar por `account id` (ordem lexicográfica) e
+  emitir warning `duplicate_priority`.
+- A dedup ocorre **após** a normalização por conta e **antes** da ordenação global.
+- `--no-dedup` (opt-in) desativa a dedup e preserva o comportamento do dump.ts de referência;
+  default dedup ligado. Decisão documentada em README (CLI-D13).
+
+
 
 ## 2. Pipeline de alto nível
 
