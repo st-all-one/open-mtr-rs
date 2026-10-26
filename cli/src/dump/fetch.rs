@@ -3,8 +3,9 @@ use crate::error::CliError;
 use crate::normalize::DumpRow;
 use chrono::NaiveDate;
 use open_mtr_core::openmtr::domain::newtypes::DataMtr;
-use open_mtr_core::openmtr::domain::{FiltroMtr, Periodo};
+use open_mtr_core::openmtr::domain::{FiltroMtr, FiltroParte, Periodo, TipoParte};
 use open_mtr_core::openmtr::open_mtr_client::OpenMtrClient;
+use open_mtr_core::openmtr::system::System;
 
 pub(super) async fn fetch_window(
     client: &OpenMtrClient,
@@ -12,8 +13,43 @@ pub(super) async fn fetch_window(
     start: NaiveDate,
     end: NaiveDate,
 ) -> Result<(Vec<DumpRow>, Vec<String>), CliError> {
+    // O endpoint `listaManifesto` filtra por `tipoParceiro`; sem os quatro
+    // papéis o dump só traz os manifestos em que a conta é GERADORA (default 8)
+    // e perde transportador/destinador/armazenador.
+    let papeis: Vec<Option<TipoParte>> = if matches!(account.system, System::Sinir) {
+        vec![
+            Some(TipoParte::Gerador),
+            Some(TipoParte::Transportador),
+            Some(TipoParte::Destinador),
+            Some(TipoParte::Armazenador),
+        ]
+    } else {
+        vec![None]
+    };
+
+    let mut out = Vec::new();
+    let mut item_errors = Vec::new();
+    for papel in &papeis {
+        let (mut rows, mut errors) = fetch_role(client, account, start, end, papel.clone()).await?;
+        out.append(&mut rows);
+        item_errors.append(&mut errors);
+    }
+    Ok((out, item_errors))
+}
+
+async fn fetch_role(
+    client: &OpenMtrClient,
+    account: &Account,
+    start: NaiveDate,
+    end: NaiveDate,
+    papel: Option<TipoParte>,
+) -> Result<(Vec<DumpRow>, Vec<String>), CliError> {
     let periodo =
         Periodo::new(DataMtr(start), DataMtr(end)).map_err(|e| CliError::Usage(e.to_string()))?;
+    let parte = papel.map(|tipo| FiltroParte {
+        tipo,
+        ..FiltroParte::default()
+    });
     let mut out = Vec::new();
     let mut item_errors = Vec::new();
     let system = account.system_slug().to_string();
@@ -21,6 +57,7 @@ pub(super) async fn fetch_window(
     loop {
         let filtro = FiltroMtr {
             periodo: Some(periodo.clone()),
+            parte: parte.clone(),
             detalhado: true,
             pagina: Some(page),
             tamanho: Some(500),
@@ -43,14 +80,7 @@ pub(super) async fn fetch_window(
         }
         let reached_total =
             total.is_some_and(|t| i64::try_from(out.len()).unwrap_or(i64::MAX) >= t);
-        if len < 500
-            || !matches!(
-                account.system,
-                open_mtr_core::openmtr::system::System::Sinir
-            )
-            || page >= 1000
-            || reached_total
-        {
+        if len < 500 || !matches!(account.system, System::Sinir) || page >= 1000 || reached_total {
             break;
         }
         page += 1;

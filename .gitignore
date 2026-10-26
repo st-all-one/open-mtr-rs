@@ -31,3 +31,4 @@ conversations
 # Dados derivados (índices e downloads)
 indice_mtr_pe.json
 /mtrs/
+open-mtr-config.toml
