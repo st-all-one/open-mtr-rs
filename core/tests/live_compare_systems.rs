@@ -237,6 +237,7 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
                     grupo_embalagem: None,
                     codigo_interno: None,
                     descricao_interna: None,
+                    observacao: None,
                 })
                 .collect()
         })

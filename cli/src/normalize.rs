@@ -144,6 +144,7 @@ fn residuos_json_detalhado(residuos: &[Residuo]) -> String {
                 "grupo_embalagem": r.grupo_embalagem,
                 "codigo_interno": r.codigo_interno,
                 "descricao_interna": r.descricao_interna,
+                "observacao": r.observacao,
             })
         })
         .collect();
@@ -178,6 +179,7 @@ fn observacoes_residuos(residuos: &[Residuo]) -> String {
     for r in residuos {
         push_observacao(&mut obs, r.descricao.as_ref());
         push_observacao(&mut obs, r.descricao_interna.as_ref());
+        push_observacao(&mut obs, r.observacao.as_ref());
     }
     obs.join(" | ")
 }

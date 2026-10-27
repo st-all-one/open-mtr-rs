@@ -4,6 +4,24 @@ Todas as mudanças relevantes do openMTR/CLI. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa
 versionamento semântico.
 
+## [0.1.3] - 2026-10-26
+
+### Corrigido
+
+- Observação por item de resíduo não era capturada. O domínio ganhou
+  `Residuo.observacao`; o SINIR/SIGOR leem `marObservacao` e o MTR-PE lê
+  `manifestoItemObservacao`/`observacao`.
+- `OBSERVACOES_RESIDUOS` do `mtrs.csv` agora inclui essas observações, além das
+  descrições. Exemplo real (`MTR 251033145388`): `CX 387` e `CX 574`.
+- `residuos.csv` ganhou a coluna `observacao`; o JSON detalhado passou a expor
+  `observacao` em cada resíduo.
+
+### Compatibilidade
+
+- O campo é aditivo no domínio/JSONL; consumidores antigos continuam lendo os
+  campos existentes.
+- O cabeçalho do `residuos.csv` mudou para incluir `observacao`.
+
 ## [0.1.2] - 2026-10-26
 
 ### Adicionado

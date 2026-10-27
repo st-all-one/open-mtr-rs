@@ -224,7 +224,7 @@ dump consolidado. Instalação:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | sh
-openmtr --version        # openmtr 0.1.2
+openmtr --version        # openmtr 0.1.3
 openmtr self update --check
 ```
 
@@ -247,7 +247,7 @@ O dump do SINIR consulta os quatro papéis (`gerador`, `transportador`,
 
 | Arquivo | Conteúdo |
 |---|---|
-| `mtrs.csv` | planilha de trabalho: `OTR` (`-` no dump bruto), `MTR_NUMERO`, `DATA_EMISSAO`, `DATA_RECEBIMENTO`, `QNT_RECEBIDA`, `QNT_ESPERADA`, `STATUS`, `OBSERVACOES`, `OBSERVACOES_RESIDUOS`, `GERADOR_CNPJ`, `GERADOR_NOME`, `DESTINADOR_CNPJ`, `DESTINADOR_NOME`, `MOTORISTA`, `PLACA`, `CLASSE_RESIDUO`, `RESIDUO_JSON_DETALHADO`, `SISTEMA` |
+| `mtrs.csv` | planilha de trabalho: `OTR` (`-` no dump bruto), `MTR_NUMERO`, `DATA_EMISSAO`, `DATA_RECEBIMENTO`, `QNT_RECEBIDA`, `QNT_ESPERADA`, `STATUS`, `OBSERVACOES`, `OBSERVACOES_RESIDUOS` (descrições + observações por item, ex.: `CX 387`), `GERADOR_CNPJ`, `GERADOR_NOME`, `DESTINADOR_CNPJ`, `DESTINADOR_NOME`, `MOTORISTA`, `PLACA`, `CLASSE_RESIDUO`, `RESIDUO_JSON_DETALHADO`, `SISTEMA` |
 | `mtrs.jsonl` | uma linha por MTR com o registro completo (`account`, partes, resíduos, prioridade) |
 | `residuos.csv` | uma linha por resíduo |
 | `relatorio.json` | totais, deduplicação, contas ignoradas e erros |

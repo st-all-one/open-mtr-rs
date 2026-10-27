@@ -237,6 +237,13 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
             .or_else(|| v.get("descricaolnterna"))
             .and_then(|s| s.as_str())
             .map(String::from),
+        observacao: v
+            .get("marObservacao")
+            .or_else(|| v.get("observacao"))
+            .and_then(|s| s.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from),
     }
 }
 

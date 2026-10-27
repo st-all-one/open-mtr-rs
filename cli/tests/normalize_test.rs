@@ -21,6 +21,7 @@ fn residuo(classe: u32, descricao: &str, quantidade: f64, recebida: f64) -> Resi
         grupo_embalagem: None,
         codigo_interno: None,
         descricao_interna: Some(descricao.to_string()),
+        observacao: Some(format!("OBS {classe}")),
     }
 }
 
@@ -81,7 +82,7 @@ fn dump_row_preserva_campos_do_schema_rico() {
     assert_eq!(row.motorista.as_deref(), Some("Fulano"));
     assert_eq!(row.placa.as_deref(), Some("ABC1D23"));
     assert_eq!(row.classe_residuo, "CLASSE I | CLASSE II A");
-    assert_eq!(row.observacoes_residuos, "Desc A | Desc B");
+    assert_eq!(row.observacoes_residuos, "Desc A | OBS 1 | Desc B | OBS 43");
 }
 
 #[test]
@@ -100,6 +101,7 @@ fn residuo_json_e_detalhado_e_estavel() {
     assert_eq!(detalhado[1]["classe"], 43);
     assert!(detalhado[0]["numero_onu"].is_null());
     assert!(detalhado[0]["densidade"].is_null());
+    assert_eq!(detalhado[0]["observacao"], "OBS 1");
 }
 
 #[test]

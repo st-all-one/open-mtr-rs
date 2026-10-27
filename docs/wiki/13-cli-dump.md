@@ -116,6 +116,9 @@ contas resolvidas
 - **Classes de resíduo:** a tabela `listar_classes` da conta é consultada uma
   vez por conta e usada para traduzir `codigo → descrição` em maiúsculas; se a
   tabela falhar, o CSV mantém `CLASSE <código>`.
+- **Observação do resíduo:** o campo `marObservacao` (SINIR/SIGOR) e
+  `manifestoItemObservacao`/`observacao` (MTR-PE) é preservado em
+  `OBSERVACOES_RESIDUOS`, no JSON detalhado e no `residuos.csv`.
 - **Paginação:** 500 por página, até 1000 páginas por papel.
 - **Deduplicação:** a chave é `system|numero` (ou `barcode` quando o número é
   vazio). Menor `access_priority` vence; empate resolve por `account`.
@@ -144,7 +147,7 @@ DESTINADOR_NOME,MOTORISTA,PLACA,CLASSE_RESIDUO,RESIDUO_JSON_DETALHADO,SISTEMA
 | `QNT_ESPERADA` | soma de `quantidade`; `0` quando não há resíduos |
 | `STATUS` | status normalizado do domínio |
 | `OBSERVACOES` | observação do MTR |
-| `OBSERVACOES_RESIDUOS` | descrições únicas dos resíduos, separadas por barra vertical |
+| `OBSERVACOES_RESIDUOS` | descrições e observações únicas dos resíduos, separadas por barra vertical |
 | `GERADOR_CNPJ` / `GERADOR_NOME` | documento e razão social do gerador |
 | `DESTINADOR_CNPJ` / `DESTINADOR_NOME` | documento e razão social do destinador |
 | `MOTORISTA` / `PLACA` | dados de transporte, quando expostos pela API |
@@ -155,7 +158,7 @@ DESTINADOR_NOME,MOTORISTA,PLACA,CLASSE_RESIDUO,RESIDUO_JSON_DETALHADO,SISTEMA
 O JSON detalhado contém: `codigo_ibama`, `descricao`, `quantidade`,
 `quantidade_recebida`, `unidade`, `estado_fisico`, `classe`, `acondicionamento`,
 `tratamento`, `densidade`, `numero_onu`, `classe_risco`, `nome_embarque`,
-`grupo_embalagem`, `codigo_interno` e `descricao_interna`.
+`grupo_embalagem`, `codigo_interno`, `descricao_interna` e `observacao`.
 
 ### 5.2 `mtrs.jsonl`
 
@@ -170,7 +173,7 @@ Uma linha por resíduo (não por MTR):
 
 ```text
 account,system,numero,idx,codigo_ibama,descricao,quantidade,quantidade_recebida,
-unidade,estado_fisico,classe,acondicionamento,tratamento
+unidade,estado_fisico,classe,acondicionamento,tratamento,observacao
 ```
 
 ### 5.4 `relatorio.json`
@@ -193,7 +196,7 @@ detalhado, `skipped` e `errors` por conta/janela. Erros parciais geram
 | 6 | conflito |
 | 7 | rede |
 
-## 7. Release 0.1.2 pela pipeline
+## 7. Release 0.1.3 pela pipeline
 
 A release é disparada por tag `vX.Y.Z` (`.github/workflows/release.yml`):
 
@@ -206,15 +209,15 @@ Fluxo local:
 
 ```sh
 make check
-./scripts/bump-version.sh v0.1.2
-git add -A && git commit -S -m "chore(release): 0.1.2"
-git tag -a v0.1.2 -m "openmtr v0.1.2"
-git push origin main && git push origin v0.1.2
+./scripts/bump-version.sh v0.1.3
+git add -A && git commit -S -m "chore(release): 0.1.3"
+git tag -a v0.1.3 -m "openmtr v0.1.3"
+git push origin main && git push origin v0.1.3
 ```
 
 O binário instalado reporta a versão do workspace:
 
 ```sh
-openmtr --version        # openmtr 0.1.2
-openmtr self version     # openmtr 0.1.2
+openmtr --version        # openmtr 0.1.3
+openmtr self version     # openmtr 0.1.3
 ```

@@ -203,6 +203,13 @@ fn json_para_residuo_item(v: &Value) -> Residuo {
         grupo_embalagem: None,
         codigo_interno: None,
         descricao_interna: None,
+        observacao: v
+            .get("manifestoItemObservacao")
+            .or_else(|| v.get("observacao"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from),
     }
 }
 

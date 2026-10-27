@@ -32,6 +32,9 @@ pub struct Residuo {
     pub codigo_interno: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub descricao_interna: Option<String>,
+    /// Observação livre do item de resíduo (ex.: `CX 574`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observacao: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -24,7 +24,7 @@ pub(super) fn write_csv(path: &Path, rows: &[DumpRow]) -> Result<(), CliError> {
         .map_err(|e| CliError::Config(format!("escrever {}: {e}", path.display())))
 }
 
-const RESIDUOS_HEADER: &str = "account,system,numero,idx,codigo_ibama,descricao,quantidade,quantidade_recebida,unidade,estado_fisico,classe,acondicionamento,tratamento";
+const RESIDUOS_HEADER: &str = "account,system,numero,idx,codigo_ibama,descricao,quantidade,quantidade_recebida,unidade,estado_fisico,classe,acondicionamento,tratamento,observacao";
 
 #[allow(
     clippy::excessive_nesting,
@@ -59,6 +59,7 @@ pub(super) fn write_residuos_csv(path: &Path, rows: &[DumpRow]) -> Result<(), Cl
                 field("classe"),
                 field("acondicionamento"),
                 field("tratamento"),
+                field("observacao"),
             ]
             .iter()
             .map(|f| escape_csv_field(f))

@@ -83,6 +83,7 @@ pub struct Residuo {
     pub classe: Option<u32>,
     pub acondicionamento: Option<u32>,
     pub tratamento: Option<u32>,
+    pub observacao: Option<String>,
 }
 ```
 
@@ -97,3 +98,4 @@ Ambos os sistemas preenchem os mesmos campos de resíduo, com diferenças nos no
 | Classe | `claCodigo` | `codigoClasse` |
 | Acondicionamento | `tiaCodigo` | `codigoAcondicionamento` |
 | Tratamento | `traCodigo` | `codigoTecnologia` |
+| Observação do item | `marObservacao` | `manifestoItemObservacao` |

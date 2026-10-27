@@ -145,6 +145,12 @@ fn json_para_residuo(v: &Value) -> Residuo {
         grupo_embalagem: None,
         codigo_interno: None,
         descricao_interna: None,
+        observacao: v
+            .get("marObservacao")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from),
     }
 }
 
@@ -214,6 +220,12 @@ fn json_para_residuo_detalhe(v: &Value) -> Residuo {
         descricao_interna: v
             .get("descricaolnterna")
             .and_then(|s| s.as_str())
+            .map(String::from),
+        observacao: v
+            .get("marObservacao")
+            .and_then(|s| s.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
             .map(String::from),
     }
 }
@@ -1445,6 +1457,26 @@ mod tests {
             lista_manifesto_path(&filtro),
             "/listaManifesto?page=0&size=10"
         );
+    }
+
+    #[test]
+    fn residuo_detalhe_captura_mar_observacao() {
+        let v = json!({
+            "residuo": {
+                "resCodigoIbama": "170201",
+                "resDescricao": "Madeira"
+            },
+            "marQuantidade": 5.0,
+            "marObservacao": "CX 387"
+        });
+        let r = json_para_residuo_detalhe(&v);
+        assert_eq!(r.observacao.as_deref(), Some("CX 387"));
+    }
+
+    #[test]
+    fn residuo_detalhe_observacao_em_branco_vira_none() {
+        let v = json!({ "marObservacao": "   " });
+        assert!(json_para_residuo_detalhe(&v).observacao.is_none());
     }
 
     #[test]

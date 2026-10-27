@@ -37,7 +37,8 @@ fn detail(numero: &str) -> ResponseTemplate {
             "parceiroDestinador": { "parCnpj": "11222333000181", "parDescricao": "Destinadora" },
             "listaManifestoResiduo": [{
                 "residuo": { "resCodigoIbama": "F001", "resDescricao": "Resíduo" },
-                "marQuantidade": 1.5
+                "marQuantidade": 1.5,
+                "marObservacao": "CX 387"
             }]
         }
     }))
@@ -136,6 +137,11 @@ async fn dump_deduplicates_same_mtr_across_accounts() {
     assert!(csv.contains("Geradora"));
     assert!(csv.contains("Destinadora"));
     assert!(csv.contains("F001"));
+    assert!(csv.contains("CX 387"));
+
+    let residuos = std::fs::read_to_string(dir.path().join("residuos.csv")).expect("residuos");
+    assert!(residuos.contains(",observacao"));
+    assert!(residuos.contains("CX 387"));
 }
 
 #[allow(
