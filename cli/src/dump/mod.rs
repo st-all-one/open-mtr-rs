@@ -14,7 +14,7 @@ mod pdf;
 mod state;
 
 use dedup::deduplicate;
-use fetch::fetch_window;
+use fetch::{fetch_classes, fetch_window};
 use output::{write_csv, write_jsonl, write_residuos_csv};
 use pdf::download_pdfs;
 use state::{State, load_previous_rows, load_state, save_state};
@@ -105,12 +105,13 @@ pub async fn run(
         let mut effective = (*account).clone();
         effective.max_concurrency = Some(opts.concurrency.max(1));
         let client = effective.build_client(cfg, opts.fixed_time).await?;
+        let classes = fetch_classes(&client).await;
         for (start, end) in &windows {
             let key = window_key(*start, *end);
             if state.is_finished(&account.id, &key) {
                 continue;
             }
-            match fetch_window(&client, account, *start, *end).await {
+            match fetch_window(&client, account, *start, *end, &classes).await {
                 Ok((mut got, item_errors)) => {
                     fetched += got.len();
                     rows.append(&mut got);

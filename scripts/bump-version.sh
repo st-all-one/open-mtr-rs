@@ -53,9 +53,25 @@ mv Cargo.lock.bump.tmp Cargo.lock
 
 # 3. Exemplo de instalação.
 if [ -f install.sh ]; then
-    sed "s|OPENMTR_VERSION=v$old|OPENMTR_VERSION=v$new|g" install.sh >install.sh.bump.tmp
+    sed -e "s|OPENMTR_VERSION=v$old|OPENMTR_VERSION=v$new|g" \
+        -e "s|VERSION=v$old|VERSION=v$new|g" install.sh >install.sh.bump.tmp
     mv install.sh.bump.tmp install.sh
     chmod +x install.sh
+fi
+
+# 4. Metadados do binding Node (package.json + lock).
+if [ -f napi/package.json ]; then
+    sed -E "s/\"version\": \"$old\"/\"version\": \"$new\"/" napi/package.json >napi/package.json.bump.tmp
+    mv napi/package.json.bump.tmp napi/package.json
+fi
+if [ -f napi/package-lock.json ]; then
+    awk -v old="$old" -v new="$new" '
+        NR <= 12 && $0 ~ "\"version\": \"" old "\"" {
+            sub("\"version\": \"" old "\"", "\"version\": \"" new "\"")
+        }
+        { print }
+    ' napi/package-lock.json >napi/package-lock.json.bump.tmp
+    mv napi/package-lock.json.bump.tmp napi/package-lock.json
 fi
 
 echo "pronto. Próximos passos:"

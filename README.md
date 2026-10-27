@@ -18,6 +18,7 @@
 
 - [Arquitetura](#-arquitetura)
 - [Quick-start](#-quick-start)
+- [CLI e dump](#-cli-e-dump)
 - [Sistemas Suportados](#-sistemas-suportados)
 - [16 Métodos Universais](#-16-métodos-universais)
 - [Adapter Pattern](#-adapter-pattern)
@@ -212,6 +213,52 @@ match mtr.consultar_mtrs(&filtro).await {
     }
 }
 ```
+
+---
+
+## 🖥️ CLI e dump
+
+O workspace inclui o binário `openmtr` (crate `open-mtr-cli`), uma CLI
+multi-conta para consultar, criar e baixar MTRs/CDFs, executar batch e gerar o
+dump consolidado. Instalação:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | sh
+openmtr --version        # openmtr 0.1.2
+openmtr self update --check
+```
+
+Configuração (`open-mtr-config.toml`) e dump de um período:
+
+```sh
+cp open-mtr-config.example.toml open-mtr-config.toml
+chmod 600 open-mtr-config.toml
+openmtr config validate
+openmtr account list
+
+openmtr dump --all-accounts \
+  --from 2026-09-01 --to 2026-09-30 \
+  --window-days 30 --out dump/2026-09 --format both --concurrency 10
+```
+
+O dump do SINIR consulta os quatro papéis (`gerador`, `transportador`,
+`destinador`, `armazenador`), pagina em blocos de 500, deduplica por
+`system + numero` (menor `access_priority` vence) e grava:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `mtrs.csv` | planilha de trabalho: `OTR` (`-` no dump bruto), `MTR_NUMERO`, `DATA_EMISSAO`, `DATA_RECEBIMENTO`, `QNT_RECEBIDA`, `QNT_ESPERADA`, `STATUS`, `OBSERVACOES`, `OBSERVACOES_RESIDUOS`, `GERADOR_CNPJ`, `GERADOR_NOME`, `DESTINADOR_CNPJ`, `DESTINADOR_NOME`, `MOTORISTA`, `PLACA`, `CLASSE_RESIDUO`, `RESIDUO_JSON_DETALHADO`, `SISTEMA` |
+| `mtrs.jsonl` | uma linha por MTR com o registro completo (`account`, partes, resíduos, prioridade) |
+| `residuos.csv` | uma linha por resíduo |
+| `relatorio.json` | totais, deduplicação, contas ignoradas e erros |
+
+`--resume` retoma janelas concluídas; `--force` reinicia; `--pdf` baixa os PDFs.
+O contrato completo — colunas, JSON detalhado, códigos de saída e fluxo da
+pipeline — está em [`docs/wiki/13-cli-dump.md`](docs/wiki/13-cli-dump.md).
+
+A release é disparada por tag e publicada pela pipeline para Linux (musl),
+macOS (arm64/x86_64) e Windows (x64/arm64), com `sha256sums.txt` e notas
+extraídas do `CHANGELOG.md`.
 
 ---
 
@@ -572,6 +619,7 @@ Ver [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) para documentação c
 | [docs/wiki/10-bindings.md](docs/wiki/10-bindings.md) | Targets: napi-rs, UniFFI, WASM |
 | [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) | Integração Deno/WASM completa |
 | [docs/wiki/12-architecture-refactored.md](docs/wiki/12-architecture-refactored.md) | Mapa completo da arquitetura |
+| [docs/wiki/13-cli-dump.md](docs/wiki/13-cli-dump.md) | CLI `openmtr`, dump multi-conta, schema do CSV e pipeline de release |
 | [docs/AGENTS.md](docs/AGENTS.md) | Guia do agente para desenvolvimento |
 
 ---

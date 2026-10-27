@@ -54,6 +54,7 @@ jobs:
       - run: sh -n install.sh
       - run: bash -n scripts/bump-version.sh
       - run: bash -n scripts/package.sh
+      - run: bash -n scripts/release-notes.sh
 
   supply-chain:
     name: deny + audit + machete + typos

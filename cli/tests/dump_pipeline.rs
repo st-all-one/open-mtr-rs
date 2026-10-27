@@ -1,6 +1,7 @@
 use open_mtr_cli::account::Account;
 use open_mtr_cli::config::{CliConfig, Defaults, RawAccount};
 use open_mtr_cli::dump::{DumpOptions, run};
+use open_mtr_cli::normalize::CSV_HEADER;
 use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -129,7 +130,12 @@ async fn dump_deduplicates_same_mtr_across_accounts() {
     assert_eq!(report["totals"]["deduplicated"], 2);
 
     let csv = std::fs::read_to_string(dir.path().join("mtrs.csv")).expect("csv");
-    assert_eq!(csv.lines().count(), 3, "header + 2 linhas");
+    let mut lines = csv.lines();
+    assert_eq!(lines.next(), Some(CSV_HEADER));
+    assert_eq!(lines.count(), 2, "duas linhas de MTR");
+    assert!(csv.contains("Geradora"));
+    assert!(csv.contains("Destinadora"));
+    assert!(csv.contains("F001"));
 }
 
 #[allow(

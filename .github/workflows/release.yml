@@ -167,6 +167,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -179,13 +181,18 @@ jobs:
           sha256sum openmtr-*.* > sha256sums.txt
           cat sha256sums.txt
 
+      - name: Notas da versão (CHANGELOG)
+        run: ./scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > release-notes.md
+
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: openMTR ${{ github.ref_name }}
+          body_path: release-notes.md
           files: |
             dist/*.tar.gz
             dist/*.zip
             dist/sha256sums.txt
-          generate_release_notes: true
+          generate_release_notes: false
           draft: false
           prerelease: false

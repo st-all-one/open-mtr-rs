@@ -19,6 +19,7 @@
 | [10-bindings.md](10-bindings.md) | Targets de binding: napi-rs (Node.js), UniFFI (Swift/Kotlin/Python), WASM (Deno/Web) |
 | [11-wasm-deno.md](11-wasm-deno.md) | Integração WASM/Deno: `JsFetchTransport`, build pipeline, API exportada, exemplo funcional |
 | [12-architecture-refactored.md](12-architecture-refactored.md) | Mapa completo da arquitetura: camadas, fluxo de requisição, workspace, decisões, métricas |
+| [13-cli-dump.md](13-cli-dump.md) | CLI `openmtr`, configuração multi-conta, dump SINIR/MTR-PE/SIGOR, schema do CSV/JSONL e pipeline de release |
 
 ---
 

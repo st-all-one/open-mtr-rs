@@ -140,7 +140,7 @@ Consulta: `kd task list --scope epic_01k7qz1b`.
 
 ## 10. Status de implementação
 
-Versão atual do CLI: **0.1.0** (`[workspace.package].version`, herdada por `open-mtr-cli`; `openmtr --version`).
+Versão atual do CLI: **0.1.2** (`[workspace.package].version`, herdada por `open-mtr-cli`; `openmtr --version`).
 Release publica assets `openmtr-v<versão>-<target>.{tar.gz,zip}` + `sha256sums.txt`, compilados em
 runners nativos (sem Docker/cross), com portão de tag == Cargo.toml.
 

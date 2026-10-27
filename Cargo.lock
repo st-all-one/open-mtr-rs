@@ -1368,13 +1368,12 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "open-mtr-cli"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
  "clap",
  "flate2",
- "futures",
  "hex",
  "open-mtr-core",
  "reqwest",
@@ -1383,19 +1382,17 @@ dependencies = [
  "sha2",
  "tar",
  "tempfile",
- "thiserror 2.0.21",
  "tokio",
  "toml 0.8.23",
  "toml_edit",
  "tracing",
  "tracing-subscriber",
- "uuid",
  "wiremock",
 ]
 
 [[package]]
 name = "open-mtr-core"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1419,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "open-mtr-napi"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "napi",
@@ -1433,7 +1430,7 @@ dependencies = [
 
 [[package]]
 name = "open-mtr-uniffi"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "open-mtr-core",
  "serde",
@@ -1444,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "open-mtr-wasm"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "futures",

@@ -1,5 +1,6 @@
-use open_mtr_core::openmtr::domain::Mtr;
+use open_mtr_core::openmtr::domain::{Mtr, Residuo};
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 /// Linha normalizada de dump. Campos fixos para CSV/golden estáveis.
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
@@ -32,6 +33,10 @@ pub struct DumpRow {
     pub destinador_razao_social: Option<String>,
     pub destinador_unidade: Option<u32>,
     pub residuos_json: String,
+    #[serde(default)]
+    pub classe_residuo: String,
+    #[serde(default)]
+    pub observacoes_residuos: String,
     pub qtd_residuo_esperada: f64,
     pub qtd_residuo_recebida: Option<f64>,
     pub access_priority: u8,
@@ -39,6 +44,16 @@ pub struct DumpRow {
 
 impl DumpRow {
     pub fn from_mtr(account: &str, system: &str, access_priority: u8, mtr: Mtr) -> Self {
+        Self::from_mtr_with_classes(account, system, access_priority, mtr, &BTreeMap::new())
+    }
+
+    pub fn from_mtr_with_classes(
+        account: &str,
+        system: &str,
+        access_priority: u8,
+        mtr: Mtr,
+        classes: &BTreeMap<u32, String>,
+    ) -> Self {
         let doc = |p: &Option<open_mtr_core::openmtr::domain::Parte>| {
             p.as_ref().map(|x| x.documento.to_string())
         };
@@ -88,8 +103,9 @@ impl DumpRow {
             destinador_documento: doc(&mtr.destinador),
             destinador_razao_social: razao(&mtr.destinador),
             destinador_unidade: unidade(&mtr.destinador),
-            residuos_json: serde_json::to_string(&mtr.residuos)
-                .unwrap_or_else(|_| "[]".to_string()),
+            residuos_json: residuos_json_detalhado(&mtr.residuos),
+            classe_residuo: classe_residuo(&mtr.residuos, classes),
+            observacoes_residuos: observacoes_residuos(&mtr.residuos),
             qtd_residuo_esperada: esperada,
             qtd_residuo_recebida: recebida,
             access_priority,
@@ -107,54 +123,97 @@ impl DumpRow {
     }
 }
 
+fn residuos_json_detalhado(residuos: &[Residuo]) -> String {
+    let detalhado: Vec<serde_json::Value> = residuos
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "codigo_ibama": r.codigo_ibama,
+                "descricao": r.descricao,
+                "quantidade": r.quantidade,
+                "quantidade_recebida": r.quantidade_recebida,
+                "unidade": r.unidade,
+                "estado_fisico": r.estado_fisico,
+                "classe": r.classe,
+                "acondicionamento": r.acondicionamento,
+                "tratamento": r.tratamento,
+                "densidade": r.densidade,
+                "numero_onu": r.numero_onu,
+                "classe_risco": r.classe_risco,
+                "nome_embarque": r.nome_embarque,
+                "grupo_embalagem": r.grupo_embalagem,
+                "codigo_interno": r.codigo_interno,
+                "descricao_interna": r.descricao_interna,
+            })
+        })
+        .collect();
+    serde_json::to_string(&detalhado).unwrap_or_else(|_| "[]".to_string())
+}
+
+fn classe_residuo(residuos: &[Residuo], classes: &BTreeMap<u32, String>) -> String {
+    let mut nomes: Vec<String> = Vec::new();
+    for r in residuos {
+        let Some(c) = r.classe else { continue };
+        let nome = classes
+            .get(&c)
+            .cloned()
+            .unwrap_or_else(|| format!("CLASSE {c}"));
+        if !nomes.contains(&nome) {
+            nomes.push(nome);
+        }
+    }
+    nomes.join(" | ")
+}
+
+fn push_observacao(obs: &mut Vec<String>, valor: Option<&String>) {
+    let Some(valor) = valor else { return };
+    let v = valor.trim();
+    if !v.is_empty() && !obs.iter().any(|x| x == v) {
+        obs.push(v.to_string());
+    }
+}
+
+fn observacoes_residuos(residuos: &[Residuo]) -> String {
+    let mut obs: Vec<String> = Vec::new();
+    for r in residuos {
+        push_observacao(&mut obs, r.descricao.as_ref());
+        push_observacao(&mut obs, r.descricao_interna.as_ref());
+    }
+    obs.join(" | ")
+}
+
 fn round4(v: f64) -> f64 {
     (v * 10_000.0).round() / 10_000.0
 }
 
-pub const CSV_HEADER: &str = "account,system,numero,barcode,status,tipo_manifesto,estado_uf,data_criacao,data_expedicao,data_recebimento,armazenamento_temporario,tem_alteracao_pendente,hash,observacao,motorista,placa,numero_estadual,codigo_estadual,gerador_documento,gerador_razao_social,gerador_unidade,transportador_documento,transportador_razao_social,transportador_unidade,destinador_documento,destinador_razao_social,destinador_unidade,residuos_json,qtd_residuo_esperada,qtd_residuo_recebida";
+pub const CSV_HEADER: &str = "OTR,MTR_NUMERO,DATA_EMISSAO,DATA_RECEBIMENTO,QNT_RECEBIDA,QNT_ESPERADA,STATUS,OBSERVACOES,OBSERVACOES_RESIDUOS,GERADOR_CNPJ,GERADOR_NOME,DESTINADOR_CNPJ,DESTINADOR_NOME,MOTORISTA,PLACA,CLASSE_RESIDUO,RESIDUO_JSON_DETALHADO,SISTEMA";
 
 pub fn csv_line(row: &DumpRow) -> String {
+    let emissao = row
+        .data_criacao
+        .as_deref()
+        .or(row.data_expedicao.as_deref());
     let fields: Vec<String> = vec![
-        csv_escape(&row.account),
-        csv_escape(&row.system),
+        "-".to_string(),
         csv_escape(&row.numero),
-        csv_escape(&row.barcode),
-        csv_escape(&row.status),
-        opt_num(row.tipo_manifesto),
-        opt_str(&row.estado_uf),
-        opt_str(&row.data_criacao),
-        opt_str(&row.data_expedicao),
+        emissao.map(csv_escape).unwrap_or_default(),
         opt_str(&row.data_recebimento),
-        opt_bool(row.armazenamento_temporario),
-        opt_bool(row.tem_alteracao_pendente),
-        opt_str(&row.hash),
-        opt_str(&row.observacao),
-        opt_str(&row.motorista),
-        opt_str(&row.placa),
-        opt_str(&row.numero_estadual),
-        row.codigo_estadual
-            .map(|v| v.to_string())
-            .unwrap_or_default(),
-        opt_str(&row.gerador_documento),
-        opt_str(&row.gerador_razao_social),
-        row.gerador_unidade
-            .map(|v| v.to_string())
-            .unwrap_or_default(),
-        opt_str(&row.transportador_documento),
-        opt_str(&row.transportador_razao_social),
-        row.transportador_unidade
-            .map(|v| v.to_string())
-            .unwrap_or_default(),
-        opt_str(&row.destinador_documento),
-        opt_str(&row.destinador_razao_social),
-        row.destinador_unidade
-            .map(|v| v.to_string())
-            .unwrap_or_default(),
-        csv_escape(&row.residuos_json),
-        format!("{}", row.qtd_residuo_esperada),
         row.qtd_residuo_recebida
             .map(|v| format!("{v}"))
             .unwrap_or_default(),
+        format!("{}", row.qtd_residuo_esperada),
+        csv_escape(&row.status),
+        opt_str(&row.observacao),
+        csv_escape(&row.observacoes_residuos),
+        opt_str(&row.gerador_documento),
+        opt_str(&row.gerador_razao_social),
+        opt_str(&row.destinador_documento),
+        opt_str(&row.destinador_razao_social),
+        opt_str(&row.motorista),
+        opt_str(&row.placa),
+        csv_escape(&row.classe_residuo),
+        csv_escape(&row.residuos_json),
+        csv_escape(&row.system),
     ];
     fields.join(",")
 }
@@ -175,12 +234,4 @@ fn csv_escape(s: &str) -> String {
 
 fn opt_str(v: &Option<String>) -> String {
     v.as_deref().map(csv_escape).unwrap_or_default()
-}
-
-fn opt_num(v: Option<i32>) -> String {
-    v.map(|x| x.to_string()).unwrap_or_default()
-}
-
-fn opt_bool(v: Option<bool>) -> String {
-    v.map(|b| b.to_string()).unwrap_or_default()
 }

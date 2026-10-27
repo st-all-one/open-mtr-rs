@@ -3,8 +3,8 @@
 #
 # Uso:
 #   curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | sh
-#   OPENMTR_VERSION=v0.1.0 sh install.sh
-#   VERSION=v0.1.0 sh install.sh       # alias compatível
+#   OPENMTR_VERSION=v0.1.2 sh install.sh
+#   VERSION=v0.1.2 sh install.sh       # alias compatível
 #   OPENMTR_INSTALL_DIR="$HOME/bin" sh install.sh
 #
 # Verifica SHA-256 contra sha256sums.txt da release e instala atomicamente.
