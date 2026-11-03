@@ -6,6 +6,9 @@
     reason = "adapters legados normalizam números/índices de JSON; a extração tipada entra na revitalização"
 )]
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use serde_json::{Value, json};
@@ -348,6 +351,16 @@ fn retorno_eh_sucesso(v: &Value) -> bool {
         == 0
 }
 
+/// `true` quando o payload de `/retornaManifesto` traz um manifesto aproveitável
+/// mesmo com `retornoCodigo != 0`.
+///
+/// O MTR-PE responde `903` ("Erro não identificado") com o cabeçalho completo e
+/// `itemManifestoJSONs` vazio enquanto o destinador não emite o CDF. Descartar
+/// esse payload remove o MTR do dump inteiro.
+fn manifesto_recuperavel(v: &Value) -> bool {
+    v.get("manifestoCodigo").and_then(Value::as_i64).is_some()
+}
+
 pub(crate) struct MtrPeAdapter;
 
 #[async_trait]
@@ -440,7 +453,7 @@ impl MtrAdapter for MtrPeAdapter {
                     .await
                 {
                     Ok(resp) => {
-                        if retorno_eh_sucesso(&resp) {
+                        if retorno_eh_sucesso(&resp) || manifesto_recuperavel(&resp) {
                             itens.push(ItemResult::Ok(json_para_mtr(&resp, numero)));
                         } else {
                             let msg = resp
@@ -1159,10 +1172,10 @@ impl MtrPeAdapter {
         let total = i64::try_from(barcodes.len()).unwrap_or(i64::MAX);
 
         // 2. Busca o detalhe de cada barcode (concorrência limitada)
-        let tasks = barcodes
-            .into_iter()
-            .enumerate()
-            .map(|(indice, barcode)| async move {
+        let parciais = Arc::new(AtomicUsize::new(0));
+        let tasks = barcodes.into_iter().enumerate().map(|(indice, barcode)| {
+            let parciais = Arc::clone(&parciais);
+            async move {
                 let path = format!("/retornaManifesto/{barcode}");
                 match ctx
                     .http
@@ -1171,6 +1184,9 @@ impl MtrPeAdapter {
                 {
                     Ok(resp) => {
                         if retorno_eh_sucesso(&resp) {
+                            ItemResult::Ok(json_para_mtr(&resp, &barcode))
+                        } else if manifesto_recuperavel(&resp) {
+                            parciais.fetch_add(1, Ordering::Relaxed);
                             ItemResult::Ok(json_para_mtr(&resp, &barcode))
                         } else {
                             let msg = resp
@@ -1188,15 +1204,25 @@ impl MtrPeAdapter {
                         problema: OpenMTRError::api_error(502, e.to_string()),
                     },
                 }
-            });
+            }
+        });
 
         let itens: Vec<_> = stream::iter(tasks).buffered(CONCORRENCIA).collect().await;
+        let parciais = parciais.load(Ordering::Relaxed);
 
         info!(
             total = %total,
             sucessos = %itens.iter().filter(|i| matches!(i, ItemResult::Ok(_))).count(),
+            parciais = %parciais,
             "MTRs consultados por período via códigos de barras"
         );
+        if parciais > 0 {
+            warn!(
+                parciais,
+                total = %total,
+                "MTR-PE: manifesto sem CDF; emitido só com o cabeçalho"
+            );
+        }
 
         let mut lote = LoteResult::new(itens);
         lote.total = Some(total);
