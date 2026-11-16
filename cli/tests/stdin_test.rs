@@ -23,6 +23,22 @@ fn with_stdin(args: &[&str], stdin: &[u8]) -> Output {
 }
 
 #[test]
+fn health_does_not_require_config() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = openmtr()
+        .arg("health")
+        .current_dir(dir.path())
+        .output()
+        .expect("executar openmtr");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "ok");
+}
+
+#[test]
 fn login_from_stdin_health() {
     let out = with_stdin(
         &["--login", "-", "health"],

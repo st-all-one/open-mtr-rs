@@ -69,6 +69,15 @@ pub fn asset_name(tag: &str, target: &str) -> String {
     }
 }
 
+fn release_tag(tag: &str) -> String {
+    let tag = tag.trim();
+    if tag.starts_with('v') {
+        tag.to_string()
+    } else {
+        format!("v{tag}")
+    }
+}
+
 fn api_base(opts: &UpdateOptions) -> String {
     opts.api_base
         .clone()
@@ -113,10 +122,10 @@ async fn latest_tag(client: &reqwest::Client, opts: &UpdateOptions) -> Result<St
 pub async fn plan(opts: &UpdateOptions) -> Result<Plan, CliError> {
     let target = target()?;
     let client = reqwest::Client::new();
-    let tag = match &opts.version {
+    let tag = release_tag(&match &opts.version {
         Some(v) => v.clone(),
         None => latest_tag(&client, opts).await?,
-    };
+    });
     let asset = asset_name(&tag, &target);
     let base = download_base(opts);
     let asset_url = format!("{base}/{REPO}/releases/download/{tag}/{asset}");
@@ -262,4 +271,16 @@ pub fn extract_tar_gz(bytes: &[u8]) -> Result<Vec<u8>, CliError> {
 
 fn normalize(v: &str) -> String {
     v.trim().trim_start_matches('v').to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_tag;
+
+    #[test]
+    fn release_tag_accepts_with_or_without_v() {
+        assert_eq!(release_tag("0.2.0"), "v0.2.0");
+        assert_eq!(release_tag("v0.2.0"), "v0.2.0");
+        assert_eq!(release_tag(" v0.2.0 "), "v0.2.0");
+    }
 }

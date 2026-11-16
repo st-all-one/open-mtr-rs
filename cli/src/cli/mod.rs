@@ -313,6 +313,17 @@ impl Cli {
                 "--login não se aplica a `config`/`account`; use --config".into(),
             ));
         }
+        if matches!(&self.command, Command::Health) {
+            // `health` é um smoke test do binário: valida o login quando
+            // fornecido, mas não exige config nem chama a API.
+            let _ = self
+                .login
+                .as_deref()
+                .map(crate::login::Login::parse)
+                .transpose()?;
+            println!("ok");
+            return Ok(());
+        }
         let rt = match &self.login {
             Some(raw) => Runtime::from_login(crate::login::Login::parse(raw)?)?,
             None => Runtime::load(&self.config)?,
