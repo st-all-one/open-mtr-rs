@@ -27,6 +27,14 @@ versionamento semântico.
   para injetar/ler access token sem repetir autenticação.
 - Docs: README e plano da superfície da CLI com login, posicionais, stdin,
   batch, cache e exemplos.
+- Docs: guia operacional completo em `docs/wiki/14-cli.md` e referência de flags
+  gerada do `--help` em `docs/wiki/14-cli-reference.md`.
+- Distribuição: `install.sh` com modos release/source, `--uninstall`,
+  `--install-dir`/`--prefix`, `--target`, `--no-path`, checksum SHA-256 e lixo
+  recuperável para o binário anterior.
+- Release: o workflow aceita `workflow_dispatch` com tag, usa a mesma
+  `RELEASE_TAG` em build/checksums/publicação e anexa a referência gerada
+  `openmtr-cli-vX.Y.Z.md` ao GitHub Release.
 - Testes de unidade/integração para validação de login, conflitos de stdin,
   persistência do cache e batch.
 
@@ -44,6 +52,10 @@ versionamento semântico.
 - Leitura de `numeros`/`codigos` é estrita: item não-string não é descartado
   silenciosamente.
 - `batch` passa a exigir `--file` explícito; `-` continua lendo stdin.
+- `openmtr self update --version` aceita `X.Y.Z` ou `vX.Y.Z` e normaliza a tag
+  usada no asset/URL.
+- `make check` valida `cli-docs-check`, garantindo que a referência gerada da
+  CLI esteja sincronizada com o binário.
 
 ### Corrigido
 
@@ -52,6 +64,8 @@ versionamento semântico.
 - Escrita potencial fora de `--out` em `mtr.download`/`cdf.download` do batch.
 - Descarte silencioso de itens inválidos em `params.numeros`/`params.codigos`.
 - Token/senha vazios passavam na validação de login e falhavam tarde na API.
+- `openmtr health` deixou de exigir `open-mtr-config.toml`; continua validando
+  `--login` quando fornecido e não chama a API.
 
 ### Segurança
 

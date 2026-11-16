@@ -4,11 +4,15 @@
 # (Linux x86_64 + Linux ARM64 nativo, macOS arm64 com cross para x86_64,
 # Windows x86_64 com cross para ARM64 via toolchain MSVC).
 #
-# Fluxo: `git tag v0.1.0 && git push origin v0.1.0` → verifica versão → compila a matriz →
-# publica o GitHub Release com os `.tar.gz`/`.zip` + `sha256sums.txt`.
+# Fluxo: `git tag v0.2.0 && git push origin v0.2.0` → verifica versão/docs → compila a
+# matriz → publica o GitHub Release com `.tar.gz`/`.zip`, `sha256sums.txt`, notas do
+# CHANGELOG e a referência gerada `openmtr-cli-vX.Y.Z.md`.
 #
 # Consumido por `install.sh` e por `openmtr self update`
 # (asset `openmtr-<tag>-<target>.{tar.gz,zip}` + `sha256sums.txt`).
+#
+# O workflow_dispatch aceita `tag` para republicar uma tag existente sem recriá-la;
+# sem `tag`, apenas compila os artefatos e não publica.
 
 name: Release
 
@@ -16,13 +20,20 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag existente para publicar (ex.: v0.2.0); vazio = apenas build"
+        required: false
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
+  INPUT_TAG: ${{ github.event.inputs.tag }}
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
@@ -34,6 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -42,21 +55,25 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Portão local (fmt + clippy + test + orçamento de linhas)
+      - name: Portão local (fmt + clippy + test + file-length + cli-docs)
         run: make check
 
       - name: Tag == versão do workspace
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            echo "workflow_dispatch em '${GITHUB_REF_NAME}': pulando verificação de tag."
+          if [[ -n "${INPUT_TAG}" && "${INPUT_TAG}" != v* ]]; then
+            echo "::error::workflow_dispatch: informe a tag com prefixo v (ex.: v0.2.0)."
+            exit 1
+          fi
+          if [[ "${RELEASE_TAG}" != v* ]]; then
+            echo "workflow_dispatch sem tag: apenas build (sem release)."
             exit 0
           fi
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${RELEASE_TAG#v}"
           version="$(grep -m1 -E '^version = "[0-9]' Cargo.toml | cut -d'"' -f2)"
-          echo "tag=v${tag}  workspace=${version}"
+          echo "tag=${RELEASE_TAG}  workspace=${version}"
           if [[ "${tag}" != "${version}" ]]; then
-            echo "::error::tag v${tag} != versão ${version} do Cargo.toml — ajuste um dos dois."
+            echo "::error::tag ${RELEASE_TAG} != versão ${version} do Cargo.toml — ajuste um dos dois."
             exit 1
           fi
 
@@ -94,6 +111,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -131,7 +150,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
+          tag="${RELEASE_TAG}"
           name="openmtr-${tag}-${{ matrix.target }}"
           staging="dist/${name}"
           mkdir -p "$staging"
@@ -161,38 +180,52 @@ jobs:
   release:
     name: publicar
     needs: build
-    # Só publica quando o gatilho é uma tag; `workflow_dispatch` em branch apenas compila.
-    if: startsWith(github.ref, 'refs/tags/')
+    # Publica em tag; workflow_dispatch com `tag` republica uma tag existente.
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      - name: Gerar referência da CLI (release asset)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/openmtr"
+          tar -xzf "dist/openmtr-${RELEASE_TAG}-x86_64-unknown-linux-musl.tar.gz" -C "$RUNNER_TEMP/openmtr"
+          chmod +x "$RUNNER_TEMP/openmtr/openmtr"
+          OPENMTR_BIN="$RUNNER_TEMP/openmtr/openmtr" \
+            ./scripts/gen-cli-docs.sh --out "dist/openmtr-cli-${RELEASE_TAG}.md"
+          test -s "dist/openmtr-cli-${RELEASE_TAG}.md"
+
       - name: Checksums SHA-256
         run: |
           set -euo pipefail
           cd dist
-          sha256sum openmtr-*.* > sha256sums.txt
+          sha256sum openmtr-*.tar.gz openmtr-*.zip > sha256sums.txt
           cat sha256sums.txt
 
       - name: Notas da versão (CHANGELOG)
-        run: ./scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > release-notes.md
+        run: ./scripts/release-notes.sh "${RELEASE_TAG#v}" > release-notes.md
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: openMTR ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: openMTR ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
           files: |
             dist/*.tar.gz
             dist/*.zip
             dist/sha256sums.txt
+            dist/openmtr-cli-*.md
           generate_release_notes: false
           draft: false
           prerelease: false

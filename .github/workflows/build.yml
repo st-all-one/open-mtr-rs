@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   check:
-    name: fmt + clippy + test + file-length
+    name: fmt + clippy + test + file-length + cli-docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,10 +51,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sh -n install.sh
+      - run: bash -n install.sh
       - run: bash -n scripts/bump-version.sh
       - run: bash -n scripts/package.sh
       - run: bash -n scripts/release-notes.sh
+      - run: bash -n scripts/gen-cli-docs.sh
 
   supply-chain:
     name: deny + audit + machete + typos

@@ -220,10 +220,13 @@ match mtr.consultar_mtrs(&filtro).await {
 
 O workspace inclui o binário `openmtr` (crate `open-mtr-cli`), uma CLI
 multi-conta para consultar, criar e baixar MTRs/CDFs, executar batch e gerar o
-dump consolidado. Instalação:
+dump consolidado. O guia completo — instalação, login/config, flags, comandos,
+`batch`, `dump`, saída e release — está em
+[`docs/wiki/14-cli.md`](docs/wiki/14-cli.md); a referência de flags é gerada em
+[`docs/wiki/14-cli-reference.md`](docs/wiki/14-cli-reference.md). Instalação:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | bash
 openmtr --version        # openmtr 0.2.0
 openmtr self update --check
 ```
@@ -657,6 +660,8 @@ Ver [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) para documentação c
 | [docs/wiki/11-wasm-deno.md](docs/wiki/11-wasm-deno.md) | Integração Deno/WASM completa |
 | [docs/wiki/12-architecture-refactored.md](docs/wiki/12-architecture-refactored.md) | Mapa completo da arquitetura |
 | [docs/wiki/13-cli-dump.md](docs/wiki/13-cli-dump.md) | CLI `openmtr`, dump multi-conta, schema do CSV e pipeline de release |
+| [docs/wiki/14-cli.md](docs/wiki/14-cli.md) | Guia detalhado da CLI: instalação, login/config, comandos, batch, saída e release |
+| [docs/wiki/14-cli-reference.md](docs/wiki/14-cli-reference.md) | Referência de flags gerada do `--help` do binário |
 | [docs/AGENTS.md](docs/AGENTS.md) | Guia do agente para desenvolvimento |
 
 ---

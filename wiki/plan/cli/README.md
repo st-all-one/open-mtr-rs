@@ -160,7 +160,7 @@ Crate `cli/` (`open-mtr-cli`, binário `openmtr`), verificado por `make check` e
 | M3 — config estrito, aviso de segredo inline, checagem de permissão | implementado | `cli/src/config.rs` |
 | M3 — `config migrate` com `--dry-run` e backup datado | implementado | `cli/src/migrate.rs` |
 | M4 — `self version/update` com `--check`/`--dry-run`, checksum e rename atômico | implementado | `cli/src/selfupdate.rs`, `cli/tests/selfupdate_test.rs` |
-| M4 — `install.sh`, workflow de release 6 targets, config de exemplo | implementado (não exercitado em CI local) | `install.sh`, `.github/workflows/release.yml`, `open-mtr-config.example.toml` |
+| M4 — `install.sh` release/source/uninstall, workflow de release 6 targets, docs geradas e config de exemplo | implementado; source/release/uninstall testados localmente | `install.sh`, `.github/workflows/release.yml`, `scripts/gen-cli-docs.sh`, `open-mtr-config.example.toml` |
 
 Limitações conhecidas: SIGOR não participa de `dump` por período (conta única → erro `usage`;
 dump misto → conta listada em `skipped`); `ref listar` exige uma conta; extração `.zip` do
