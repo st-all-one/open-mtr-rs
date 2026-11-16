@@ -1,5 +1,6 @@
 use crate::config::{CliConfig, RawAccount};
 use crate::error::CliError;
+use crate::session::SessionCache;
 use open_mtr_core::openmtr::open_mtr_auth::{AuthParams, OpenMtrClassicAuth};
 use open_mtr_core::openmtr::open_mtr_client::OpenMtrClient;
 use open_mtr_core::openmtr::system::System;
@@ -87,54 +88,101 @@ impl Account {
         Ok(None)
     }
 
+    /// Constrói o cliente reaproveitando um access token curto, se houver.
+    ///
+    /// O cache evita repetir `POST /token` (SINIR) ou login clássico
+    /// (MTR-PE/SIGOR) a cada operação de um batch. Tokens diretos
+    /// (`token`/`token_env` em MTR-PE/SIGOR) não passam pelo cache.
     pub async fn build_client(
         &self,
         cfg: &CliConfig,
         fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        cache: &SessionCache,
     ) -> Result<OpenMtrClient, CliError> {
-        let base = self.base_url.clone();
+        let token = self.resolve_token()?;
+        let uses_refresh = matches!(self.system, System::Sinir);
+        let uses_classic = token.is_none() && !uses_refresh;
+
+        if (uses_refresh || uses_classic)
+            && let Some(cached) = cache.get(self)
+        {
+            return self.client_with_access(cfg, fixed_time, &cached).await;
+        }
+
+        if uses_refresh {
+            return self
+                .build_refresh_client(cfg, fixed_time, token, cache)
+                .await;
+        }
+
+        let token = match token {
+            Some(token) => token,
+            None => self.classic_token(cfg).await?,
+        };
+        let client = self.client_with_access(cfg, fixed_time, &token).await?;
+        if uses_classic {
+            cache.put(self, &token);
+        }
+        Ok(client)
+    }
+
+    async fn build_refresh_client(
+        &self,
+        cfg: &CliConfig,
+        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        token: Option<String>,
+        cache: &SessionCache,
+    ) -> Result<OpenMtrClient, CliError> {
+        let refresh = token.ok_or_else(|| CliError::Auth("token de refresh ausente".into()))?;
+        let client = self.client_with_refresh(cfg, fixed_time, &refresh).await?;
+        if let Ok(access) = client.access_token().await {
+            cache.put(self, &access);
+        }
+        Ok(client)
+    }
+
+    async fn classic_token(&self, cfg: &CliConfig) -> Result<String, CliError> {
+        let cpf = self
+            .cpf
+            .clone()
+            .ok_or_else(|| CliError::Auth("cpf ausente".into()))?;
+        let senha = self
+            .resolve_senha()?
+            .ok_or_else(|| CliError::Auth("senha ausente".into()))?;
+        let unidade = self
+            .unidade
+            .ok_or_else(|| CliError::Auth("unidade ausente".into()))?;
+        let params = AuthParams::CpfSenhaUnidade {
+            cpf,
+            senha,
+            unidade,
+            cnpj: self.cnpj.clone(),
+        };
+        OpenMtrClassicAuth::new(self.system)
+            .base_url_opt(self.base_url.clone())
+            .timeout_secs(cfg.defaults.timeout_secs)
+            .params(params)
+            .build()
+            .await
+            .map_err(|e| CliError::Auth(e.to_string()))
+    }
+
+    fn configured_builder(
+        &self,
+        cfg: &CliConfig,
+        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> open_mtr_core::openmtr::open_mtr_client::OpenMtrClientBuilder {
         let timeout = cfg.defaults.timeout_secs;
         let maxrps = self.max_concurrency.unwrap_or(cfg.defaults.max_concurrency);
-        // auth
-        let token = match self.resolve_token()? {
-            Some(t) => t,
-            None => {
-                // classic auth
-                let cpf = self
-                    .cpf
-                    .clone()
-                    .ok_or_else(|| CliError::Auth("cpf ausente".into()))?;
-                let senha = self
-                    .resolve_senha()?
-                    .ok_or_else(|| CliError::Auth("senha ausente".into()))?;
-                let unidade = self
-                    .unidade
-                    .ok_or_else(|| CliError::Auth("unidade ausente".into()))?;
-                let params = AuthParams::CpfSenhaUnidade {
-                    cpf,
-                    senha,
-                    unidade,
-                    cnpj: self.cnpj.clone(),
-                };
-                OpenMtrClassicAuth::new(self.system)
-                    .base_url_opt(base.clone())
-                    .timeout_secs(timeout)
-                    .params(params)
-                    .build()
-                    .await
-                    .map_err(|e| CliError::Auth(e.to_string()))?
-            }
-        };
-        let mut b = OpenMtrClient::builder()
+        let mut builder = OpenMtrClient::builder()
             .base(self.system)
-            .token(&token)
             .timeout_secs(timeout)
             .max_rps(maxrps);
-        if let Some(bu) = &base {
-            b = b.base_url(bu.clone());
+        if let Some(base) = &self.base_url {
+            builder = builder.base_url(base.clone());
         }
         if let Some(ts) = fixed_time {
-            b = b
+            builder = builder
                 .clock(std::sync::Arc::new(
                     open_mtr_core::openmtr::time_util::FixedClock::new(ts),
                 ))
@@ -142,7 +190,33 @@ impl Account {
                     open_mtr_core::openmtr::time_util::SequentialIdGenerator::default(),
                 ));
         }
-        b.build().await.map_err(|e| CliError::Auth(e.to_string()))
+        builder
+    }
+
+    async fn client_with_access(
+        &self,
+        cfg: &CliConfig,
+        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        token: &str,
+    ) -> Result<OpenMtrClient, CliError> {
+        self.configured_builder(cfg, fixed_time)
+            .access_token(token)
+            .build()
+            .await
+            .map_err(|e| CliError::Auth(e.to_string()))
+    }
+
+    async fn client_with_refresh(
+        &self,
+        cfg: &CliConfig,
+        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        token: &str,
+    ) -> Result<OpenMtrClient, CliError> {
+        self.configured_builder(cfg, fixed_time)
+            .token(token)
+            .build()
+            .await
+            .map_err(|e| CliError::Auth(e.to_string()))
     }
 }
 

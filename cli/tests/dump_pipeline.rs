@@ -2,6 +2,7 @@ use open_mtr_cli::account::Account;
 use open_mtr_cli::config::{CliConfig, Defaults, RawAccount};
 use open_mtr_cli::dump::{DumpOptions, run};
 use open_mtr_cli::normalize::CSV_HEADER;
+use open_mtr_cli::session::SessionCache;
 use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -113,7 +114,9 @@ async fn dump_deduplicates_same_mtr_across_accounts() {
                 .with_timezone(&chrono::Utc),
         ),
     };
-    run(&cfg, &refs, &opts).await.expect("dump");
+    run(&cfg, &SessionCache::memory(), &refs, &opts)
+        .await
+        .expect("dump");
 
     let lines = std::fs::read_to_string(dir.path().join("mtrs.jsonl")).expect("jsonl");
     let rows: Vec<serde_json::Value> = lines
@@ -206,7 +209,9 @@ async fn dump_is_byte_deterministic_with_fixed_time() {
             concurrency: 2,
             fixed_time: Some(fixed),
         };
-        run(&cfg, &refs, &opts).await.expect("dump");
+        run(&cfg, &SessionCache::memory(), &refs, &opts)
+            .await
+            .expect("dump");
         let mut files = Vec::new();
         for name in ["mtrs.jsonl", "mtrs.csv", "residuos.csv", "relatorio.json"] {
             files.push(std::fs::read(dir.path().join(name)).expect("arquivo"));

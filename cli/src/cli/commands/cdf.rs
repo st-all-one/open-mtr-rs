@@ -15,17 +15,34 @@ pub(super) async fn run(
     json: bool,
 ) -> Result<(), CliError> {
     match sub {
-        CdfCmd::Consultar { account, params } => {
+        CdfCmd::Consultar {
+            codigo,
+            account,
+            params,
+        } => {
+            let value = match (codigo, params) {
+                (Some(codigo), None) => serde_json::json!({ "codigos": [codigo] }),
+                (None, Some(raw)) => parse_params(Some(&raw))?,
+                (None, None) => {
+                    return Err(CliError::Usage(
+                        "cdf consultar exige <CODIGO> ou --params <JSON|->".into(),
+                    ));
+                }
+                (Some(_), Some(_)) => {
+                    return Err(CliError::Usage(
+                        "use <CODIGO> ou --params, não ambos".into(),
+                    ));
+                }
+            };
             let ids: Vec<String> = account.into_iter().collect();
-            let sel = rt.resolve(&ids, None, &[], false)?;
+            let sel = rt.select(&ids, None, &[], false)?;
             if sel.is_empty() {
                 return Err(CliError::Usage("escopo de conta obrigatório".into()));
             }
-            let value = parse_params(params.as_deref())?;
             let filtro = filtro_cdf_from_json(&value)?;
             let mut results = Vec::new();
             for acc in sel {
-                let client = acc.build_client(&rt.config, fixed_time).await?;
+                let client = acc.build_client(&rt.config, fixed_time, &rt.cache).await?;
                 let res = client
                     .consultar_cdfs(&filtro)
                     .await
@@ -40,26 +57,30 @@ pub(super) async fn run(
             }
             print_one_or_many(json, results)
         }
-        CdfCmd::Gerar { account, params } => gerar(rt, &account, params, fixed_time, json).await,
+        CdfCmd::Gerar { account, params } => {
+            gerar(rt, account.as_deref(), &params, fixed_time, json).await
+        }
         CdfCmd::Download {
             account,
             params,
             out,
-        } => download(rt, &account, params, fixed_time, &out, json).await,
+        } => download(rt, account.as_deref(), &params, fixed_time, &out, json).await,
     }
 }
 
 async fn gerar(
     rt: &Runtime,
-    account_id: &str,
-    params: Option<String>,
+    account_id: Option<&str>,
+    params: &str,
     fixed_time: Option<DateTime<Utc>>,
     json: bool,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
-    let value = parse_params(params.as_deref())?;
+    let value = parse_params(Some(params))?;
     let items: Vec<GerarCdf> = parse_items(&value)?;
-    let client = account.build_client(&rt.config, fixed_time).await?;
+    let client = account
+        .build_client(&rt.config, fixed_time, &rt.cache)
+        .await?;
     let res = client
         .gerar_cdfs(items)
         .await
@@ -69,16 +90,18 @@ async fn gerar(
 
 async fn download(
     rt: &Runtime,
-    account_id: &str,
-    params: Option<String>,
+    account_id: Option<&str>,
+    params: &str,
     fixed_time: Option<DateTime<Utc>>,
     out: &std::path::Path,
     json: bool,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
-    let value = parse_params(params.as_deref())?;
+    let value = parse_params(Some(params))?;
     let items: Vec<DownloadCdf> = parse_items(&value)?;
-    let client = account.build_client(&rt.config, fixed_time).await?;
+    let client = account
+        .build_client(&rt.config, fixed_time, &rt.cache)
+        .await?;
     let resp = client
         .download_cdfs(items)
         .await

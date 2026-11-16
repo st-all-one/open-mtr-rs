@@ -2,6 +2,7 @@ use crate::account::Account;
 use crate::config::CliConfig;
 use crate::error::CliError;
 use crate::normalize::DumpRow;
+use crate::session::SessionCache;
 use chrono::NaiveDate;
 use serde::Serialize;
 use serde_json::json;
@@ -63,6 +64,7 @@ struct Totals {
 )]
 pub async fn run(
     cfg: &CliConfig,
+    cache: &SessionCache,
     accounts: &[&Account],
     opts: &DumpOptions,
 ) -> Result<(), CliError> {
@@ -104,7 +106,7 @@ pub async fn run(
         }
         let mut effective = (*account).clone();
         effective.max_concurrency = Some(opts.concurrency.max(1));
-        let client = effective.build_client(cfg, opts.fixed_time).await?;
+        let client = effective.build_client(cfg, opts.fixed_time, cache).await?;
         let classes = fetch_classes(&client).await;
         for (start, end) in &windows {
             let key = window_key(*start, *end);
@@ -168,6 +170,7 @@ pub async fn run(
     if opts.pdf {
         download_pdfs(
             cfg,
+            cache,
             accounts,
             &rows,
             &opts.out,

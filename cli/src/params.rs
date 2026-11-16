@@ -27,13 +27,8 @@ pub fn filtro_mtr_from_json(v: &Value) -> Result<FiltroMtr, CliError> {
         periodo: periodo_from_json(v)?,
         ..FiltroMtr::default()
     };
-    if let Some(nums) = v.get("numeros").and_then(Value::as_array) {
-        f.numeros = Some(
-            nums.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect(),
-        );
+    if v.get("numeros").is_some() {
+        f.numeros = Some(string_array(v, "numeros")?);
     }
     if let Some(p) = v.get("pagina").and_then(Value::as_u64) {
         f.pagina = Some(u32::try_from(p).map_err(|_| CliError::Usage("pagina inválida".into()))?);
@@ -52,15 +47,29 @@ pub fn filtro_cdf_from_json(v: &Value) -> Result<FiltroCdf, CliError> {
         periodo: periodo_from_json(v)?,
         ..FiltroCdf::default()
     };
-    if let Some(cs) = v.get("codigos").and_then(Value::as_array) {
-        f.codigos = Some(
-            cs.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect(),
-        );
+    if v.get("codigos").is_some() {
+        f.codigos = Some(string_array(v, "codigos")?);
     }
     Ok(f)
+}
+
+/// Lê `v[field]` como array não vazio de strings, sem descartar itens.
+pub fn string_array(v: &Value, field: &str) -> Result<Vec<String>, CliError> {
+    let items = v
+        .get(field)
+        .and_then(Value::as_array)
+        .ok_or_else(|| CliError::Usage(format!("params.{field} deve ser um array de strings")))?;
+    if items.is_empty() {
+        return Err(CliError::Usage(format!("params.{field} vazio")));
+    }
+    items
+        .iter()
+        .map(|item| {
+            item.as_str().map(str::to_string).ok_or_else(|| {
+                CliError::Usage(format!("params.{field} deve conter apenas strings"))
+            })
+        })
+        .collect()
 }
 
 pub fn parse_items<T: serde::de::DeserializeOwned>(v: &Value) -> Result<Vec<T>, CliError> {
@@ -153,5 +162,19 @@ mod tests {
             "periodo": { "dataInicial": "31-05-2026", "dataFinal": "01-05-2026" }
         });
         assert!(filtro_mtr_from_json(&v).is_err());
+    }
+
+    #[test]
+    fn string_array_rejects_non_strings_empty_and_missing() {
+        assert!(string_array(&serde_json::json!({"numeros": ["1", 2]}), "numeros").is_err());
+        assert!(string_array(&serde_json::json!({"numeros": []}), "numeros").is_err());
+        assert!(string_array(&serde_json::json!({}), "numeros").is_err());
+        assert!(string_array(&serde_json::json!({"numeros": "1"}), "numeros").is_err());
+    }
+
+    #[test]
+    fn filtro_cdf_rejects_non_string_codigo() {
+        let v = serde_json::json!({"codigos": ["1", 2]});
+        assert!(filtro_cdf_from_json(&v).is_err());
     }
 }

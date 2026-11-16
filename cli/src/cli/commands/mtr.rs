@@ -1,7 +1,7 @@
 use super::find_account;
 use super::io::{print_one_or_many, write_downloads};
 use crate::error::CliError;
-use crate::params::{filtro_mtr_from_json, parse_items, parse_params};
+use crate::params::{filtro_mtr_from_json, parse_items, parse_params, string_array};
 use crate::runtime::Runtime;
 use chrono::{DateTime, Utc};
 use open_mtr_core::openmtr::domain::{
@@ -18,6 +18,7 @@ pub(super) async fn run(
 ) -> Result<(), CliError> {
     match sub {
         MtrCmd::Consultar {
+            numero,
             account,
             system,
             tag,
@@ -26,6 +27,7 @@ pub(super) async fn run(
         } => {
             consultar(
                 rt,
+                numero,
                 account,
                 system,
                 tag,
@@ -37,25 +39,77 @@ pub(super) async fn run(
             .await
         }
         MtrCmd::Criar { account, params } => {
-            write(rt, &account, params, fixed_time, WriteKind::Criar, json).await
+            write(
+                rt,
+                account.as_deref(),
+                &params,
+                fixed_time,
+                WriteKind::Criar,
+                json,
+            )
+            .await
         }
         MtrCmd::Receber { account, params } => {
-            write(rt, &account, params, fixed_time, WriteKind::Receber, json).await
+            write(
+                rt,
+                account.as_deref(),
+                &params,
+                fixed_time,
+                WriteKind::Receber,
+                json,
+            )
+            .await
         }
         MtrCmd::Cancelar { account, params } => {
-            write(rt, &account, params, fixed_time, WriteKind::Cancelar, json).await
+            write(
+                rt,
+                account.as_deref(),
+                &params,
+                fixed_time,
+                WriteKind::Cancelar,
+                json,
+            )
+            .await
         }
         MtrCmd::Modificar { account, params } => {
-            write(rt, &account, params, fixed_time, WriteKind::Modificar, json).await
+            write(
+                rt,
+                account.as_deref(),
+                &params,
+                fixed_time,
+                WriteKind::Modificar,
+                json,
+            )
+            .await
         }
         MtrCmd::Aceitar { account, params } => {
-            write(rt, &account, params, fixed_time, WriteKind::Aceitar, json).await
+            write(
+                rt,
+                account.as_deref(),
+                &params,
+                fixed_time,
+                WriteKind::Aceitar,
+                json,
+            )
+            .await
         }
         MtrCmd::Download {
+            numero,
             account,
             params,
             out,
-        } => download(rt, &account, params, fixed_time, &out, json).await,
+        } => {
+            download(
+                rt,
+                numero,
+                account.as_deref(),
+                params,
+                fixed_time,
+                &out,
+                json,
+            )
+            .await
+        }
     }
 }
 
@@ -65,6 +119,7 @@ pub(super) async fn run(
 )]
 async fn consultar(
     rt: &Runtime,
+    numero: Option<String>,
     account: Option<String>,
     system: Option<String>,
     tag: Vec<String>,
@@ -73,16 +128,29 @@ async fn consultar(
     fixed_time: Option<DateTime<Utc>>,
     json: bool,
 ) -> Result<(), CliError> {
+    let value = match (numero, params) {
+        (Some(numero), None) => serde_json::json!({ "numeros": [numero] }),
+        (None, Some(raw)) => parse_params(Some(&raw))?,
+        (None, None) => {
+            return Err(CliError::Usage(
+                "mtr consultar exige <NUMERO> ou --params <JSON|->".into(),
+            ));
+        }
+        (Some(_), Some(_)) => {
+            return Err(CliError::Usage(
+                "use <NUMERO> ou --params, não ambos".into(),
+            ));
+        }
+    };
     let ids: Vec<String> = account.into_iter().collect();
-    let sel = rt.resolve(&ids, system.as_deref(), &tag, all_accounts)?;
+    let sel = rt.select(&ids, system.as_deref(), &tag, all_accounts)?;
     if sel.is_empty() {
         return Err(CliError::Usage("escopo de conta obrigatório".into()));
     }
-    let value = parse_params(params.as_deref())?;
     let filtro = filtro_mtr_from_json(&value)?;
     let mut results = Vec::new();
     for acc in sel {
-        let client = acc.build_client(&rt.config, fixed_time).await?;
+        let client = acc.build_client(&rt.config, fixed_time, &rt.cache).await?;
         let res = client
             .consultar_mtrs(&filtro)
             .await
@@ -108,15 +176,17 @@ enum WriteKind {
 
 async fn write(
     rt: &Runtime,
-    account_id: &str,
-    params: Option<String>,
+    account_id: Option<&str>,
+    params: &str,
     fixed_time: Option<DateTime<Utc>>,
     kind: WriteKind,
     json: bool,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
-    let value = parse_params(params.as_deref())?;
-    let client = account.build_client(&rt.config, fixed_time).await?;
+    let value = parse_params(Some(params))?;
+    let client = account
+        .build_client(&rt.config, fixed_time, &rt.cache)
+        .await?;
     let net = |e: open_mtr_core::openmtr::error::OpenMTRError| CliError::Network(e.to_string());
     let result = match kind {
         WriteKind::Criar => {
@@ -146,25 +216,31 @@ async fn write(
 
 async fn download(
     rt: &Runtime,
-    account_id: &str,
+    numero: Option<String>,
+    account_id: Option<&str>,
     params: Option<String>,
     fixed_time: Option<DateTime<Utc>>,
     out: &std::path::Path,
     json: bool,
 ) -> Result<(), CliError> {
+    let numeros = match (numero, params) {
+        (Some(numero), None) => vec![numero],
+        (None, Some(raw)) => string_array(&parse_params(Some(&raw))?, "numeros")?,
+        (None, None) => {
+            return Err(CliError::Usage(
+                "mtr download exige <NUMERO> ou --params <JSON|-> com `numeros`".into(),
+            ));
+        }
+        (Some(_), Some(_)) => {
+            return Err(CliError::Usage(
+                "use <NUMERO> ou --params, não ambos".into(),
+            ));
+        }
+    };
     let account = find_account(rt, account_id)?;
-    let value = parse_params(params.as_deref())?;
-    let numeros: Vec<String> = value
-        .get("numeros")
-        .and_then(serde_json::Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(serde_json::Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
-        .ok_or_else(|| CliError::Usage("mtr download exige params.numeros".into()))?;
-    let client = account.build_client(&rt.config, fixed_time).await?;
+    let client = account
+        .build_client(&rt.config, fixed_time, &rt.cache)
+        .await?;
     let resp = client
         .download_mtrs(numeros)
         .await

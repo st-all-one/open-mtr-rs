@@ -3,6 +3,7 @@ use crate::account::Account;
 use crate::config::CliConfig;
 use crate::error::CliError;
 use crate::normalize::DumpRow;
+use crate::session::SessionCache;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -13,6 +14,7 @@ use std::path::Path;
 )]
 pub(super) async fn download_pdfs(
     cfg: &CliConfig,
+    cache: &SessionCache,
     accounts: &[&Account],
     rows: &[DumpRow],
     out: &Path,
@@ -27,7 +29,7 @@ pub(super) async fn download_pdfs(
         if mine.is_empty() {
             continue;
         }
-        let client = account.build_client(cfg, fixed_time).await?;
+        let client = account.build_client(cfg, fixed_time, cache).await?;
         for row in mine {
             let ident = if row.system == "mtr_pe" && !row.barcode.is_empty() {
                 row.barcode.clone()

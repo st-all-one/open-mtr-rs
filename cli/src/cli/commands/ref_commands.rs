@@ -1,10 +1,10 @@
 use super::single_account;
+use crate::cli::{RefCmd, RefTable};
 use crate::error::CliError;
 use crate::runtime::Runtime;
 use chrono::{DateTime, Utc};
+use open_mtr_core::openmtr::error::OpenMTRError;
 use open_mtr_core::openmtr::open_mtr_client::OpenMtrClient;
-
-use crate::cli::RefCmd;
 
 pub(super) async fn run(
     rt: &Runtime,
@@ -13,31 +13,60 @@ pub(super) async fn run(
     json: bool,
 ) -> Result<(), CliError> {
     match sub {
-        RefCmd::Listar { account, table } => {
-            let ids: Vec<String> = account.into_iter().collect();
-            let sel = rt.resolve(&ids, None, &[], false)?;
-            let acc = single_account(&sel)?;
-            let client = acc.build_client(&rt.config, fixed_time).await?;
-            list_table(&client, &table, json).await
+        RefCmd::Listar { table, account } => {
+            let client = client_for(rt, account, fixed_time).await?;
+            list_table(&client, table, json).await
+        }
+        RefCmd::PorResiduo { codigo, account } => {
+            let client = client_for(rt, account, fixed_time).await?;
+            let res = client
+                .listar_classes_por_residuo(&codigo)
+                .await
+                .map_err(net)?;
+            super::io::print_value(json, &res)
+        }
+        RefCmd::PorEstadoFisico { codigo, account } => {
+            let codigo = codigo.parse::<u32>().map_err(|_| {
+                CliError::Usage("CODIGO do estado físico deve ser um inteiro".into())
+            })?;
+            let client = client_for(rt, account, fixed_time).await?;
+            let res = client
+                .listar_acondicionamentos_por_estado_fisico(codigo)
+                .await
+                .map_err(net)?;
+            super::io::print_value(json, &res)
         }
     }
 }
 
-async fn list_table(client: &OpenMtrClient, table: &str, json: bool) -> Result<(), CliError> {
-    let net = |e: open_mtr_core::openmtr::error::OpenMTRError| CliError::Network(e.to_string());
+async fn client_for(
+    rt: &Runtime,
+    account: Option<String>,
+    fixed_time: Option<DateTime<Utc>>,
+) -> Result<OpenMtrClient, CliError> {
+    let ids: Vec<String> = account.into_iter().collect();
+    let sel = rt.select(&ids, None, &[], false)?;
+    let acc = single_account(&sel)?;
+    acc.build_client(&rt.config, fixed_time, &rt.cache).await
+}
+
+fn net(error: OpenMTRError) -> CliError {
+    CliError::Network(error.to_string())
+}
+
+async fn list_table(client: &OpenMtrClient, table: RefTable, json: bool) -> Result<(), CliError> {
     macro_rules! emit {
-        ($r:expr) => {{
-            let r = $r.map_err(net)?;
-            super::io::print_value(json, &r)
+        ($future:expr) => {{
+            let res = $future.await.map_err(net)?;
+            super::io::print_value(json, &res)
         }};
     }
     match table {
-        "classe" | "classes" => emit!(client.listar_classes().await),
-        "acondicionamento" | "acondicionamentos" => emit!(client.listar_acondicionamentos().await),
-        "estado_fisico" | "estados_fisicos" => emit!(client.listar_estados_fisicos().await),
-        "tratamento" | "tratamentos" => emit!(client.listar_tratamentos().await),
-        "unidade" | "unidades" => emit!(client.listar_unidades().await),
-        "residuo" | "residuos" => emit!(client.listar_residuos().await),
-        _ => Err(CliError::Usage(format!("tabela desconhecida: {table}"))),
+        RefTable::Residuo => emit!(client.listar_residuos()),
+        RefTable::Classe => emit!(client.listar_classes()),
+        RefTable::Unidade => emit!(client.listar_unidades()),
+        RefTable::Acondicionamento => emit!(client.listar_acondicionamentos()),
+        RefTable::EstadoFisico => emit!(client.listar_estados_fisicos()),
+        RefTable::Tratamento => emit!(client.listar_tratamentos()),
     }
 }

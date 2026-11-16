@@ -2,6 +2,7 @@ use open_mtr_cli::account::Account;
 use open_mtr_cli::batch::{BatchOptions, run_to};
 use open_mtr_cli::config::{CliConfig, Defaults, RawAccount};
 use open_mtr_cli::runtime::Runtime;
+use open_mtr_cli::session::SessionCache;
 use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -59,6 +60,7 @@ async fn batch_executes_consultar_and_emits_jsonl() {
     let rt = Runtime {
         config: cfg,
         accounts,
+        cache: SessionCache::memory(),
     };
 
     let dir = tempfile::tempdir().expect("tempdir");
@@ -108,6 +110,7 @@ async fn batch_dry_run_does_not_hit_network() {
     let rt = Runtime {
         config: cfg,
         accounts,
+        cache: SessionCache::memory(),
     };
 
     let dir = tempfile::tempdir().expect("tempdir");

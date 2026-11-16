@@ -1,3 +1,4 @@
+use crate::download::safe_path;
 use crate::error::CliError;
 
 pub fn print_value<T: serde::Serialize>(json: bool, value: &T) -> Result<(), CliError> {
@@ -29,12 +30,7 @@ pub(super) fn write_downloads(
     std::fs::create_dir_all(out).map_err(|e| CliError::Config(format!("criar saída: {e}")))?;
     let mut files = Vec::new();
     for item in items {
-        let name = item
-            .filename
-            .rsplit(['/', '\\'])
-            .next()
-            .unwrap_or("arquivo");
-        let path = out.join(name);
+        let path = safe_path(out, &item.filename);
         std::fs::write(&path, &item.buffer)
             .map_err(|e| CliError::Config(format!("escrever {}: {e}", path.display())))?;
         files.push(serde_json::json!({

@@ -45,7 +45,7 @@ pub fn run_account(rt: &Runtime, sub: AccountCmd) -> Result<(), CliError> {
             Ok(())
         }
         AccountCmd::Test { id } => {
-            let acc = find_account(rt, &id)?;
+            let acc = find_account(rt, Some(&id))?;
             println!("ok: {} ({})", id, acc.system_slug());
             Ok(())
         }
@@ -124,7 +124,7 @@ pub async fn run_dump(
     args: DumpArgs,
     fixed_time: Option<DateTime<Utc>>,
 ) -> Result<(), CliError> {
-    let sel = rt.resolve(
+    let sel = rt.select(
         &args.account,
         args.system.as_deref(),
         &args.tag,
@@ -146,7 +146,7 @@ pub async fn run_dump(
         concurrency: args.concurrency,
         fixed_time,
     };
-    dump::run(&rt.config, &sel, &opts).await
+    dump::run(&rt.config, &rt.cache, &sel, &opts).await
 }
 
 pub async fn run_batch(
@@ -163,11 +163,18 @@ pub async fn run_batch(
     batch::run(rt, &opts).await
 }
 
-fn find_account<'a>(rt: &'a Runtime, id: &str) -> Result<&'a Account, CliError> {
-    rt.accounts
-        .iter()
-        .find(|a| a.id == id && a.enabled)
-        .ok_or_else(|| CliError::NotFound(format!("conta não encontrada: {id}")))
+pub(super) fn find_account<'a>(rt: &'a Runtime, id: Option<&str>) -> Result<&'a Account, CliError> {
+    if rt.is_login() && id.is_some() {
+        return Err(CliError::Usage("--login não combina com --account".into()));
+    }
+    match id {
+        Some(id) => rt
+            .accounts
+            .iter()
+            .find(|a| a.id == id && a.enabled)
+            .ok_or_else(|| CliError::NotFound(format!("conta não encontrada: {id}"))),
+        None => rt.single(),
+    }
 }
 
 fn single_account<'a>(sel: &[&'a Account]) -> Result<&'a Account, CliError> {
