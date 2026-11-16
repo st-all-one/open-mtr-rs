@@ -109,7 +109,7 @@ Consulta: `kd task list --scope epic_01k7qz1b`.
 
 ## 7. Regras de ouro do projeto CLI
 
-- **Rust 1.99 / Edition 2024**, MSRV igual ao workspace.
+- **Rust 1.100 / Edition 2024**, MSRV igual ao workspace.
 - `make check` verde em cada fase: fmt, clippy `-D warnings`, testes, orçamento de linhas.
 - Arquivos de produção ≤ 300 linhas; o gate transitório atual não deve ser aumentado.
 - Sem `unwrap`/`expect`/`panic` em produção. Testes/fixtures podem usar atalhos explícitos.

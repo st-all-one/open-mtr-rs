@@ -222,15 +222,13 @@ fn json_para_mtr(v: &Value, barcode: &str) -> Mtr {
     let residuos: Vec<Residuo> = v
         .get("itemManifestoJSONs")
         .and_then(|a| a.as_array())
-        .map(|arr| arr.iter().map(json_para_residuo_item).collect())
-        .unwrap_or_default();
+        .map_or_default(|arr| arr.iter().map(json_para_residuo_item).collect());
 
     Mtr {
         numero: v
             .get("manifestoCodigo")
             .and_then(Value::as_i64)
-            .map(|n| n.to_string())
-            .unwrap_or_default(),
+            .map_or_default(|n| n.to_string()),
         barcode: barcode.to_string(),
         status: map_status_pe(situacao),
         gerador: Some(cnpj_para_parte(
@@ -512,8 +510,7 @@ impl MtrAdapter for MtrPeAdapter {
                     let dtos = resp
                         .get("manifestoJSONDtos")
                         .and_then(Value::as_array)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
+                        .map_or_default(Vec::as_slice);
                     if dtos.is_empty() {
                         itens.push(ItemResult::Erro {
                             indice,
@@ -588,8 +585,7 @@ impl MtrAdapter for MtrPeAdapter {
                     let dtos = resp
                         .get("manifestoRecebimentoJSONs")
                         .and_then(Value::as_array)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
+                        .map_or_default(Vec::as_slice);
                     for dto in dtos {
                         if retorno_eh_sucesso(dto) {
                             itens.push(ItemResult::Ok(MtrRecebido {
@@ -649,8 +645,7 @@ impl MtrAdapter for MtrPeAdapter {
                             numero: resp
                                 .get("manifestoCodigo")
                                 .and_then(Value::as_i64)
-                                .map(|n| n.to_string())
-                                .unwrap_or_default(),
+                                .map_or_default(|n| n.to_string()),
                             status: "Cancelado".into(),
                             data_cancelamento: None,
                         }));
@@ -708,8 +703,7 @@ impl MtrAdapter for MtrPeAdapter {
                             let dtos = resp
                                 .get("manifestoAlterarJSONs")
                                 .and_then(Value::as_array)
-                                .map(Vec::as_slice)
-                                .unwrap_or_default();
+                                .map_or_default(Vec::as_slice);
                             if let Some(dto) = dtos.first() {
                                 if retorno_eh_sucesso(dto) {
                                     itens.push(ItemResult::Ok(MtrModificado {
@@ -883,13 +877,11 @@ impl MtrAdapter for MtrPeAdapter {
                                     codigo: cdf
                                         .get("codigo")
                                         .and_then(Value::as_i64)
-                                        .map(|n| n.to_string())
-                                        .unwrap_or_default(),
+                                        .map_or_default(|n| n.to_string()),
                                     numero: cdf
                                         .get("codigo")
                                         .and_then(Value::as_i64)
-                                        .map(|n| n.to_string())
-                                        .unwrap_or_default(),
+                                        .map_or_default(|n| n.to_string()),
                                     data_emissao: ctx.today(),
                                     status: String::new(),
                                 }));
@@ -959,8 +951,7 @@ impl MtrAdapter for MtrPeAdapter {
                 let lista = resp
                     .get("listaCdfDTO")
                     .and_then(Value::as_array)
-                    .map(Vec::as_slice)
-                    .unwrap_or_default();
+                    .map_or_default(Vec::as_slice);
                 let cdfs: Vec<Cdf> = lista
                     .iter()
                     .map(|v| Cdf {
@@ -1032,7 +1023,7 @@ impl MtrAdapter for MtrPeAdapter {
             .http
             .post("/retornaListaResiduo", &json!({}), "listar_residuos")
             .await?;
-        let items = response.as_array().map(Vec::as_slice).unwrap_or_default();
+        let items = response.as_array().map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_residuo_ibama).collect(),
         ))
@@ -1051,7 +1042,7 @@ impl MtrAdapter for MtrPeAdapter {
                 "listar_acondicionamentos",
             )
             .await?;
-        let items = response.as_array().map(Vec::as_slice).unwrap_or_default();
+        let items = response.as_array().map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_acondicionamento).collect(),
         ))
@@ -1066,7 +1057,7 @@ impl MtrAdapter for MtrPeAdapter {
             .http
             .post("/retornaListaClasse", &json!({}), "listar_classes")
             .await?;
-        let items = response.as_array().map(Vec::as_slice).unwrap_or_default();
+        let items = response.as_array().map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_classe).collect(),
         ))
@@ -1085,7 +1076,7 @@ impl MtrAdapter for MtrPeAdapter {
                 "listar_estados_fisicos",
             )
             .await?;
-        let items = response.as_array().map(Vec::as_slice).unwrap_or_default();
+        let items = response.as_array().map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_estado_fisico).collect(),
         ))
@@ -1100,7 +1091,7 @@ impl MtrAdapter for MtrPeAdapter {
             .http
             .post("/retornaListaTecnologia", &json!({}), "listar_tratamentos")
             .await?;
-        let items = response.as_array().map(Vec::as_slice).unwrap_or_default();
+        let items = response.as_array().map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_tratamento).collect(),
         ))
@@ -1115,7 +1106,7 @@ impl MtrAdapter for MtrPeAdapter {
             .http
             .post("/retornaListaUnidade", &json!({}), "listar_unidades")
             .await?;
-        let items = response.as_array().map(Vec::as_slice).unwrap_or_default();
+        let items = response.as_array().map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_unidade).collect(),
         ))

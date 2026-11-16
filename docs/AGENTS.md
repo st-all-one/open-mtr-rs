@@ -19,7 +19,7 @@ deno run --allow-read --allow-net wasm/examples/main.ts
 
 | Componente | Tecnologia |
 |---|---|
-| Runtime | Rust 1.99+ (edition 2024) |
+| Runtime | Rust 1.100+ (edition 2024) |
 | Async (native) | `tokio` (sync, time) — **opcional**, feature `native-http` |
 | HTTP (native) | `reqwest` 0.12 + `rustls` — **opcional**, feature `native-http` |
 | HTTP (WASM) | `globalThis.fetch()` via `js_sys` — sem `reqwest`, sem `tokio` |
@@ -56,8 +56,7 @@ open-mtr-core (lib)
 │   │   └── sigor.rs          # SigorAdapter (~862 linhas)
 │   ├── transport/            # ★ NOVO: abstração de transporte HTTP
 │   │   ├── mod.rs            # trait HttpTransport, HttpRequest, HttpResponse
-│   │   ├── reqwest.rs        # ReqwestTransport (feature native-http)
-│   │   └── fetch.rs          # FetchTransport (feature wasm-http)
+│   │   └── reqwest.rs        # ReqwestTransport (feature native-http)
 │   ├── client/               # HTTP genérico
 │   │   ├── http.rs           # MtrHttpClient (retry, auth, rate-limit)
 │   │   └── token.rs          # TokenManager (refresh JWT, sem lógica HTTP)

@@ -257,8 +257,7 @@ fn json_para_mtr(v: &Value) -> Mtr {
     let residuos: Vec<Residuo> = v
         .get("listaManifestoResiduo")
         .and_then(|a| a.as_array())
-        .map(|arr| arr.iter().map(json_para_residuo_detalhe).collect())
-        .unwrap_or_default();
+        .map_or_default(|arr| arr.iter().map(json_para_residuo_detalhe).collect());
 
     Mtr {
         numero: v
@@ -490,7 +489,7 @@ impl MtrAdapter for SigorAdapter {
             .and_then(|s| s.as_str())
             .ok_or_else(|| OpenMTRError::auth("Resposta do /gettoken não contém objetoResposta"))?;
 
-        let jwt = token_str.strip_prefix("Bearer ").unwrap_or(token_str);
+        let jwt = token_str.trim_prefix("Bearer ");
 
         info!("Token SIGOR obtido com sucesso");
         Ok(jwt.to_string())
@@ -653,8 +652,7 @@ impl MtrAdapter for SigorAdapter {
                     let dtos = resp
                         .get("objetoResposta")
                         .and_then(Value::as_array)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
+                        .map_or_default(Vec::as_slice);
                     if dtos.is_empty() {
                         itens.push(ItemResult::Erro {
                             indice,
@@ -746,8 +744,7 @@ impl MtrAdapter for SigorAdapter {
                     let results = resp
                         .get("objetoResposta")
                         .and_then(Value::as_array)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
+                        .map_or_default(Vec::as_slice);
                     for (i, dto) in results.iter().enumerate() {
                         let erro = dto.get("erro").and_then(Value::as_bool).unwrap_or(true);
                         let man_num = dto
@@ -937,8 +934,7 @@ impl MtrAdapter for SigorAdapter {
                             codigo: resp
                                 .get("numeroCDF")
                                 .and_then(Value::as_i64)
-                                .map(|n| n.to_string())
-                                .unwrap_or_default(),
+                                .map_or_default(|n| n.to_string()),
                             numero: String::new(),
                             data_emissao: ctx.today(),
                             status: String::new(),
@@ -1028,8 +1024,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_residuo_ibama).collect(),
         ))
@@ -1047,8 +1042,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_acondicionamento).collect(),
         ))
@@ -1066,8 +1060,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_classe).collect(),
         ))
@@ -1085,8 +1078,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_estado_fisico).collect(),
         ))
@@ -1104,8 +1096,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_tratamento).collect(),
         ))
@@ -1123,8 +1114,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_unidade).collect(),
         ))
@@ -1143,8 +1133,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_classe).collect(),
         ))
@@ -1164,8 +1153,7 @@ impl MtrAdapter for SigorAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         Ok(LoteResult::from_vec(
             items.iter().map(json_para_acondicionamento).collect(),
         ))

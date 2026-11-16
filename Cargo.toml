@@ -7,12 +7,11 @@ default-members = ["core"]
 [workspace.package]
 version = "0.1.3"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 license = "MIT OR Apache-2.0"
 authors = ["openMTR contributors"]
 description = "Shell unificado, assíncrono e multi-sistema para APIs de MTR"
 repository = "https://github.com/st-all-one/open-mtr-rs"
-homepage = "https://github.com/st-all-one/open-mtr-rs"
 publish = false
 
 [workspace.dependencies]
@@ -34,14 +33,6 @@ tokio = { version = "1", features = ["sync", "time"] }
 
 # HTTP WASM (transporte local no crate `wasm`)
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = [
-    "Headers",
-    "Request",
-    "RequestInit",
-    "RequestMode",
-    "Response",
-    "Window",
-] }
 js-sys = "0.3"
 web-time = "1"
 
@@ -76,6 +67,14 @@ non_ascii_idents = "deny"
 noop_method_call = "deny"
 unused_import_braces = "deny"
 variant_size_differences = "warn"
+
+[workspace.lints.cargo]
+# Cargo 1.100: dependência declarada e nunca usada é erro de rigor.
+unused_dependencies = "deny"
+unused_workspace_dependencies = "deny"
+# `missing_lints_inheritance` fica no default (warn); o `cli` o dispensa com um
+# `[lints]` vazio e a dívida registrada em AGENTS.md §4, item 7.
+redundant_homepage = "deny"  # `homepage` igual a `repository` é ruído no manifesto.
 
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "deny"

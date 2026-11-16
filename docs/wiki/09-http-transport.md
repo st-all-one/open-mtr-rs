@@ -2,8 +2,7 @@
 
 O coração da refatoração openMTR. Um trait que desacopla o cliente HTTP
 da implementação concreta, permitindo múltiplos backends: `reqwest` (native),
-`gloo-net` (WASM browser), `globalThis.fetch` (Deno/Bun/Workers), mock para
-testes.
+`globalThis.fetch` (WASM browser/Deno/Bun/Workers), mock para testes.
 
 ## Trait
 
@@ -39,8 +38,7 @@ mockados. A abstração resolve todos os três.
 | Transport | Arquivo | Feature | Target |
 |-----------|---------|---------|--------|
 | `ReqwestTransport` | `transport/reqwest.rs` | `native-http` (default) | Linux, macOS, Windows |
-| `FetchTransport` | `transport/fetch.rs` | `wasm-http` | Browser WASM (`gloo-net`) |
-| `JsFetchTransport` | `wasm/src/transport.rs` | externo ao core | Deno, Bun, Workers (`globalThis.fetch`) |
+| `JsFetchTransport` | `wasm/src/transport.rs` | externo ao core | Browser WASM, Deno, Bun, Workers (`globalThis.fetch`) |
 
 ## MtrHttpClient
 
@@ -124,11 +122,12 @@ pub async fn refresh_token(&self) -> Result<(), OpenMTRError> {
 [features]
 default = ["native-http"]
 native-http = ["dep:reqwest", "dep:tokio", "reqwest/rustls-tls"]
-wasm-http = ["dep:gloo-net", "dep:wasm-bindgen-futures", "dep:web-sys", "dep:js-sys"]
 ```
 
-No target `wasm32-unknown-unknown`, `reqwest` e `tokio` **não são compilados**.
-O core fica com ~0 dependências de rede — todo transporte é injetado.
+No target `wasm32-unknown-unknown`, `reqwest` e `tokio` **não são compilados**; o core recebe
+`js-sys` e `web-time` por `[target.'cfg(target_arch = "wasm32")'.dependencies]`. O transporte
+`JsFetchTransport` vive no crate `wasm` e é injetado de fora — o core fica com ~0 dependências de
+rede.
 
 ## Compatibilidade WASM
 

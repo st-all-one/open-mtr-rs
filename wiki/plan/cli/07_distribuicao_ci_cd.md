@@ -103,7 +103,7 @@ on:
 ### 3.1 Job `verify`
 
 1. checkout;
-2. toolchain 1.99 + rustfmt/clippy;
+2. toolchain 1.100 + rustfmt/clippy;
 3. cache;
 4. `make check` (fmt, clippy, test, file-length);
 5. verificar `tag == versão` do `Cargo.toml` (mesma lógica do knudge);

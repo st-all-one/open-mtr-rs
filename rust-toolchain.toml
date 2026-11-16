@@ -1,6 +1,6 @@
-# Toolchain do openMTR — Rust 1.99 (channel minor: resolve o último patch).
+# Toolchain do openMTR — Rust 1.100 (channel minor: resolve o último patch).
 # A MSRV é contrato: `rust-version` no Cargo.toml e `msrv` no clippy.toml casam.
 [toolchain]
-channel = "1.99"
+channel = "1.100"
 components = ["clippy", "rustfmt"]
 profile = "minimal"

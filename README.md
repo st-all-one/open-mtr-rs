@@ -5,7 +5,7 @@
 **Shell unificado para gestão de MTRs — assíncrono, multi-sistema, tipos universais**
 
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-2b3a42?style=for-the-badge)](#-licença)
-[![Rust](https://img.shields.io/badge/Rust-1.99%2B-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/Rust-1.100%2B-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Made in Brazil](https://img.shields.io/badge/Made_in-Brazil-009739?style=for-the-badge)](https://github.com/topics/brazil)
 
 </div>
@@ -548,7 +548,7 @@ cargo test -p open-mtr-core --test live_compare_systems
 
 | Componente | Tecnologia |
 |---|---|
-| Runtime | Rust 1.99+ (edition 2024) |
+| Runtime | Rust 1.100+ (edition 2024) |
 | Async | `tokio` (sync, time, fs) |
 | HTTP | `reqwest` 0.12 (async, rustls-tls) |
 | Serialização | `serde` + `serde_json` |

@@ -82,8 +82,7 @@ pub fn run_config(
                     out.to_version,
                     out.backup
                         .as_ref()
-                        .map(|p| format!(" (backup: {})", p.display()))
-                        .unwrap_or_default()
+                        .map_or_default(|p| format!(" (backup: {})", p.display()))
                 );
             } else {
                 println!("config já está em config_version {}", out.to_version);

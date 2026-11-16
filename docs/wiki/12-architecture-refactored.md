@@ -32,11 +32,11 @@ e integração WASM.
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                               │
 │  Transportes (implementam HttpTransport)                      │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │ ReqwestTransport │  │ FetchTransport  │  │ JsFetchTransp │ │
-│  │ (native, default)│  │ (WASM browser)  │  │ (Deno/Bun)   │ │
-│  │ reqwest + rustls │  │ gloo-net        │  │ globalThis   │ │
-│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+│  ┌──────────────────┐  ┌───────────────────────────────────┐ │
+│  │ ReqwestTransport │  │ JsFetchTransport                  │ │
+│  │ (native, default)│  │ (WASM/Deno/Bun/Workers)           │ │
+│  │ reqwest + rustls │  │ globalThis.fetch                  │ │
+│  └──────────────────┘  └───────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │  Domain                                                       │
 │  Mtr, Parte, Residuo, Cnpj, FiltroMtr, Periodo, Cdf, ...    │
@@ -117,8 +117,7 @@ open-mtr-rs/
 | Feature do core | Deps ativas | Target |
 |-----------------|-------------|--------|
 | `native-http` (default) | `reqwest`, `tokio` | Linux, macOS, Windows |
-| `wasm-http` | `gloo-net`, `web-sys` | Browser WASM |
-| _nenhum_ (no-default-features) | — | WASM com `JsFetchTransport` externo |
+| _nenhum_ (no-default-features) | `js-sys`, `web-time` (alvo wasm32) | WASM com `JsFetchTransport` externo |
 
 ## Métricas
 

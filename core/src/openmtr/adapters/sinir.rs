@@ -252,8 +252,7 @@ fn json_para_mtr_detalhe(v: &Value) -> Mtr {
     let residuos: Vec<Residuo> = v
         .get("listaManifestoResiduo")
         .and_then(|a| a.as_array())
-        .map(|arr| arr.iter().map(json_para_residuo_detalhe).collect())
-        .unwrap_or_default();
+        .map_or_default(|arr| arr.iter().map(json_para_residuo_detalhe).collect());
 
     Mtr {
         numero: v
@@ -355,8 +354,7 @@ fn json_para_mtr(v: &Value) -> Mtr {
     let residuos: Vec<Residuo> = v
         .get("listaManifestoResiduo")
         .and_then(|a| a.as_array())
-        .map(|arr| arr.iter().map(json_para_residuo).collect())
-        .unwrap_or_default();
+        .map_or_default(|arr| arr.iter().map(json_para_residuo).collect());
 
     Mtr {
         numero: v
@@ -618,8 +616,7 @@ fn json_para_cdf_emitido(v: &Value, hoje: chrono::NaiveDate) -> CdfEmitido {
         codigo: v
             .get("cdfCodigo")
             .and_then(Value::as_i64)
-            .map(|n| n.to_string())
-            .unwrap_or_default(),
+            .map_or_default(|n| n.to_string()),
         numero: v
             .get("cdfNumero")
             .and_then(|s| s.as_str())
@@ -710,8 +707,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
 
         // Se detalhado, extrai só os números e busca tudo via retornaManifesto
         if filtro.detalhado && !items.is_empty() {
@@ -770,8 +766,7 @@ impl MtrAdapter for SinirAdapter {
                     let some_respostas = resp
                         .get("respostaApiwsManifestoDTO")
                         .and_then(Value::as_array)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
+                        .map_or_default(Vec::as_slice);
 
                     if some_respostas.is_empty() {
                         itens.push(ItemResult::Erro {
@@ -828,8 +823,7 @@ impl MtrAdapter for SinirAdapter {
                     let some_items = resp
                         .get("objeto")
                         .and_then(Value::as_array)
-                        .map(Vec::as_slice)
-                        .unwrap_or_default();
+                        .map_or_default(Vec::as_slice);
 
                     if some_items.is_empty() {
                         itens.push(ItemResult::Erro {
@@ -1241,8 +1235,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         let domain: Vec<ResiduoIbama> = items.iter().map(json_para_residuo_ibama).collect();
 
         info!(total = %domain.len(), "Resíduos listados");
@@ -1262,8 +1255,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         let domain: Vec<Acondicionamento> = items.iter().map(json_para_acondicionamento).collect();
 
         info!(total = %domain.len(), "Acondicionamentos listados");
@@ -1283,8 +1275,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         let domain: Vec<ClasseResiduo> = items.iter().map(json_para_classe).collect();
 
         info!(total = %domain.len(), "Classes listadas");
@@ -1304,8 +1295,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         let domain: Vec<EstadoFisico> = items.iter().map(json_para_estado_fisico).collect();
 
         info!(total = %domain.len(), "Estados físicos listados");
@@ -1325,8 +1315,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         let domain: Vec<TratamentoResiduo> = items.iter().map(json_para_tratamento).collect();
 
         info!(total = %domain.len(), "Tratamentos listados");
@@ -1346,8 +1335,7 @@ impl MtrAdapter for SinirAdapter {
         let items = response
             .get("objetoResposta")
             .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_default(Vec::as_slice);
         let domain: Vec<UnidadeMedida> = items.iter().map(json_para_unidade).collect();
 
         info!(total = %domain.len(), "Unidades listadas");

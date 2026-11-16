@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM rust:slim-bookworm AS builder
+FROM rust:1.100-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config libssl-dev curl ca-certificates python3 python3-pip \

@@ -1,5 +1,5 @@
 # =============================================================================
-# openMTR — clippy.toml (rigor máximo · Rust 1.99 / Edition 2024)
+# openMTR — clippy.toml (rigor máximo · Rust 1.100 / Edition 2024)
 # Valores de configuração do Clippy. Os NÍVEIS de lint ficam em
 # [workspace.lints] no Cargo.toml.
 # =============================================================================
@@ -70,7 +70,7 @@ vec-box-size-threshold = 4096
 too-large-for-stack = 200
 
 # ------------------------------------------------------------ MSRV / docs ----
-msrv = "1.99"
+msrv = "1.100"
 avoid-breaking-exported-api = false
 check-incompatible-msrv-in-tests = true
 check-private-items = true

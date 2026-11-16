@@ -198,11 +198,9 @@ pub fn csv_line(row: &DumpRow) -> String {
     let fields: Vec<String> = vec![
         "-".to_string(),
         csv_escape(&row.numero),
-        emissao.map(csv_escape).unwrap_or_default(),
+        emissao.map_or_default(csv_escape),
         opt_str(&row.data_recebimento),
-        row.qtd_residuo_recebida
-            .map(|v| format!("{v}"))
-            .unwrap_or_default(),
+        row.qtd_residuo_recebida.map_or_default(|v| format!("{v}")),
         format!("{}", row.qtd_residuo_esperada),
         csv_escape(&row.status),
         opt_str(&row.observacao),
@@ -235,5 +233,5 @@ fn csv_escape(s: &str) -> String {
 }
 
 fn opt_str(v: &Option<String>) -> String {
-    v.as_deref().map(csv_escape).unwrap_or_default()
+    v.as_deref().map_or_default(csv_escape)
 }

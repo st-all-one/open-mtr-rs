@@ -1,6 +1,6 @@
 # Configuração do rustfmt do openMTR (apenas opções ESTÁVEIS).
 #
-# A toolchain é estável (1.99), então opções `unstable` (ex.: `imports_granularity`,
+# A toolchain é estável (1.100), então opções `unstable` (ex.: `imports_granularity`,
 # `group_imports`, `wrap_comments`) não são usadas. Agrupar imports é manual.
 
 edition = "2024"

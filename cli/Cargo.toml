@@ -1,6 +1,5 @@
 [package]
 name = "open-mtr-cli"
-homepage.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +10,10 @@ publish = false
 [[bin]]
 name = "openmtr"
 path = "src/main.rs"
+
+# Intenção explícita: o CLI ainda não herda os lints do workspace (dívida — AGENTS.md §4, item 7).
+# Um `[lints]` vazio satisfaz `cargo::missing_lints_inheritance` sem ativar os níveis.
+[lints]
 
 [dependencies]
 open-mtr-core = { path = "../core", features = ["native-http"] }
