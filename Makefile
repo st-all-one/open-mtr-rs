@@ -2,10 +2,18 @@
 
 CARGO ?= cargo
 
-.PHONY: check fmt clippy test build file-length clean deny audit machete typos ci doc napi uniffi python kotlin swift core update-version
+.PHONY: check fmt clippy test build file-length clean deny audit machete typos ci doc napi uniffi python kotlin swift core update-version cli-docs cli-docs-check
 
-## Portão local: formatação, lints, testes e orçamento de tamanho de arquivo.
-check: fmt clippy test file-length
+## Portão local: formatação, lints, testes, orçamento de tamanho e docs geradas.
+check: fmt clippy test file-length cli-docs-check
+
+## Atualiza a referência da CLI a partir do --help real.
+cli-docs:
+	./scripts/gen-cli-docs.sh
+
+## Falha se a referência da CLI estiver desatualizada.
+cli-docs-check:
+	./scripts/gen-cli-docs.sh --check
 
 ## Verifica formatação sem alterar.
 fmt:
