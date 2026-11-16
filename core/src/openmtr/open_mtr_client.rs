@@ -39,6 +39,11 @@ impl OpenMtrClient {
     pub fn system_name(&self) -> &'static str {
         self.ctx.config.system.nome()
     }
+
+    /// Retorna o access token atual, sem o prefixo `Bearer`.
+    pub async fn access_token(&self) -> Result<String, OpenMTRError> {
+        self.ctx.http.get_token().await
+    }
 }
 
 impl OpenMtrClient {
@@ -272,6 +277,7 @@ pub struct OpenMtrClientBuilder {
     system: Option<System>,
     base_url: Option<String>,
     integration_token: Option<String>,
+    access_token: Option<String>,
     timeout: Option<Duration>,
     max_rps: Option<u32>,
     clock: Option<Arc<dyn Clock>>,
@@ -292,6 +298,15 @@ impl OpenMtrClientBuilder {
 
     pub fn token(mut self, token: impl Into<String>) -> Self {
         self.integration_token = Some(token.into());
+        self
+    }
+
+    /// Usa um access token já emitido, sem passar pela autenticação do adapter.
+    ///
+    /// É o caminho do cache de sessão: o token é instalado diretamente no
+    /// cliente e a construção não faz `POST /token` nem login clássico.
+    pub fn access_token(mut self, token: impl Into<String>) -> Self {
+        self.access_token = Some(token.into());
         self
     }
 
@@ -337,9 +352,18 @@ impl OpenMtrClientBuilder {
             .system
             .ok_or_else(|| OpenMTRError::config("system é obrigatório — use .base(System::...)"))?;
 
-        let integration_token = self.integration_token.ok_or_else(|| {
-            OpenMTRError::config("integration_token é obrigatório — use .token(...)")
-        })?;
+        let integration_token = self.integration_token;
+        let access_token = self.access_token;
+        if access_token.as_deref().is_some_and(|t| t.trim().is_empty()) {
+            return Err(OpenMTRError::config("access_token vazio"));
+        }
+        let token = integration_token
+            .or_else(|| access_token.clone())
+            .ok_or_else(|| {
+                OpenMTRError::config(
+                    "token ou access_token é obrigatório — use .token(...) ou .access_token(...)",
+                )
+            })?;
 
         let base_url = self
             .base_url
@@ -348,7 +372,7 @@ impl OpenMtrClientBuilder {
         let config = Config::builder()
             .system(system)
             .base_url(base_url)
-            .token(integration_token.clone())
+            .token(token)
             .timeout_secs(self.timeout.map_or(60, |d| d.as_secs()))
             .max_rps(self.max_rps.unwrap_or(10))
             .build()?;
@@ -365,10 +389,14 @@ impl OpenMtrClientBuilder {
             .unwrap_or_else(|| Arc::new(crate::openmtr::time_util::UuidV7Generator));
         let ctx = MtrCtx::with_determinism(http, config, clock, id_generator);
 
-        adapter.autenticar_token(&ctx).await.map_err(|mut error| {
-            error.instance = ctx.new_id();
-            error
-        })?;
+        if let Some(access) = access_token {
+            ctx.http.set_token_direct(&access);
+        } else {
+            adapter.autenticar_token(&ctx).await.map_err(|mut error| {
+                error.instance = ctx.new_id();
+                error
+            })?;
+        }
 
         info!(
             system = %adapter.nome(),

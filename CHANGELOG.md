@@ -4,6 +4,63 @@ Todas as mudanças relevantes do openMTR/CLI. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa
 versionamento semântico.
 
+## [0.2.0] - 2026-11-15
+
+### Adicionado
+
+- CLI: login de sessão única com `--login <JSON|@ARQUIVO|->` para SINIR
+  (refresh token), MTR-PE (`cnpj`, `cpf`, `unidade`, `senha`) e SIGOR (token ou
+  credenciais clássicas), com `token_env`/`senha_env`, `base_url`,
+  `timeout_secs` e `max_rps`; segredos redigidos.
+- CLI: posicionais ALVO (`mtr consultar [NUMERO]`, `mtr download [NUMERO]`,
+  `cdf consultar [CODIGO]`, `ref listar <TABELA>`, `ref por-residuo <CODIGO>`,
+  `ref por-estado-fisico <CODIGO>`), exclusivos com `--params`.
+- CLI: stdin explícito (`--params -`, `--file -`, `--login -`), heredoc e um
+  único consumidor por invocação.
+- CLI: `batch --file` obrigatório, operações `health`, `account.test`,
+  `mtr.*`, `cdf.*` e `ref.*`, `--dry-run`, `--continue-on-error` e `account`
+  omitível sob `--login`.
+- CLI: cache de access token em memória + arquivo (TTL 5 min ou `exp` do JWT
+  menos 30 s), chaveado por sistema/conta/URL/credenciais; arquivo `0600` em
+  diretório `0700`.
+- Core: `OpenMtrClientBuilder::access_token` e `OpenMtrClient::access_token`
+  para injetar/ler access token sem repetir autenticação.
+- Docs: README e plano da superfície da CLI com login, posicionais, stdin,
+  batch, cache e exemplos.
+- Testes de unidade/integração para validação de login, conflitos de stdin,
+  persistência do cache e batch.
+
+### Alterado
+
+- Rust 1.100, Edition 2024 e MSRV 1.100 (toolchain, `rust-version` e
+  `clippy.toml` alinhados).
+- Escritas (`mtr criar/receber/cancelar/modificar/aceitar`, `cdf
+  gerar/download`) exigem `--params` e uma conta (`--account` ou `--login`);
+  `--login` + `--account` é erro também nas escritas.
+- `ref listar` usa o mesmo conjunto canônico da CLI no batch, incluindo
+  `estado-fisico`.
+- Downloads usam apenas o basename do arquivo retornado pelo core; nomes com
+  `../` ou caminho absoluto não escapam de `--out`.
+- Leitura de `numeros`/`codigos` é estrita: item não-string não é descartado
+  silenciosamente.
+- `batch` passa a exigir `--file` explícito; `-` continua lendo stdin.
+
+### Corrigido
+
+- Autenticação repetida a cada operação de batch (SINIR fazia `POST /token` e
+  MTR-PE/SIGOR clássicos faziam `/gettoken` por cliente).
+- Escrita potencial fora de `--out` em `mtr.download`/`cdf.download` do batch.
+- Descarte silencioso de itens inválidos em `params.numeros`/`params.codigos`.
+- Token/senha vazios passavam na validação de login e falhavam tarde na API.
+
+### Segurança
+
+- Credenciais e refresh tokens não são gravados no cache; somente access token
+  e expiração, em arquivo `0600` (diretório `0700`).
+- `OPENMTR_NO_SESSION_CACHE=1` desliga a persistência em disco;
+  `OPENMTR_SESSION_DIR` sobrescreve o diretório.
+- Segredos são redigidos em `Debug`/mensagens de erro.
+
 ## [0.1.3] - 2026-10-26
 
 ### Corrigido

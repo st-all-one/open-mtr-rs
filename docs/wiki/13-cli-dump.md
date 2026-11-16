@@ -196,7 +196,7 @@ detalhado, `skipped` e `errors` por conta/janela. Erros parciais geram
 | 6 | conflito |
 | 7 | rede |
 
-## 7. Release 0.1.3 pela pipeline
+## 7. Release 0.2.0 pela pipeline
 
 A release é disparada por tag `vX.Y.Z` (`.github/workflows/release.yml`):
 
@@ -209,15 +209,15 @@ Fluxo local:
 
 ```sh
 make check
-./scripts/bump-version.sh v0.1.3
-git add -A && git commit -S -m "chore(release): 0.1.3"
-git tag -a v0.1.3 -m "openmtr v0.1.3"
-git push origin main && git push origin v0.1.3
+./scripts/bump-version.sh v0.2.0
+git add -A && git commit -S -m "chore(release): 0.2.0"
+git tag -a v0.2.0 -m "openmtr v0.2.0"
+git push origin main && git push origin v0.2.0
 ```
 
 O binário instalado reporta a versão do workspace:
 
 ```sh
-openmtr --version        # openmtr 0.1.3
-openmtr self version     # openmtr 0.1.3
+openmtr --version        # openmtr 0.2.0
+openmtr self version     # openmtr 0.2.0
 ```

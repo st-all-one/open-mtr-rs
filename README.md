@@ -103,7 +103,7 @@ open-mtr-core = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
-### Configuração — SINIR (token de integração):
+### Configuração — SINIR (refresh token):
 
 ```rust
 use open_mtr_core::*;
@@ -224,9 +224,46 @@ dump consolidado. Instalação:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | sh
-openmtr --version        # openmtr 0.1.3
+openmtr --version        # openmtr 0.2.0
 openmtr self update --check
 ```
+
+### Uso rápido com `--login`
+
+Para uma execução pontual, `--login` dispensa o `open-mtr-config.toml`: o objeto JSON cria uma
+sessão única (conta efêmera `login`) e vale para todos os comandos da linha. O campo `system`
+escolhe o esquema; os demais campos são planos e aceitam `token_env`/`senha_env`, `base_url`,
+`timeout_secs` e `max_rps`.
+
+```sh
+# SINIR (refresh token)
+openmtr --login '{"system":"sinir","token":"..."}' mtr consultar 2114014590
+
+# MTR-PE (credenciais clássicas)
+openmtr --login '{"system":"mtr_pe","cnpj":"...","cpf":"...","unidade":3615,"senha":"..."}' \
+  mtr consultar --params '{"periodo":{"dataInicial":"01-05-2026","dataFinal":"31-05-2026"}}'
+
+# Payload via stdin (heredoc)
+cat <<'JSON' | openmtr --login '{"system":"sinir","token":"..."}' mtr criar --params -
+[{ "gerador": {}, "transportador": {}, "destinador": {}, "residuos": [] }]
+JSON
+
+# Batch JSONL: `account` pode ser omitido na linha
+openmtr --login '{"system":"sinir","token":"..."}' batch --file ops.jsonl
+```
+
+`--login @arquivo.json` lê o objeto de um arquivo e `--login -` do stdin (exclusivo com
+`--params -`/`--file -`); segredos nunca aparecem em log ou erro. A flag é incompatível com
+`--account`, `--system`, `--tag`, `--all-accounts` e com os comandos `config`, `account` e `self`.
+
+O login é trocado **uma vez** por um access token curto e esse token é reutilizado nas
+operações seguintes, inclusive dentro de um `batch`. SINIR parte do refresh token e obtém o
+access token via `POST /token`; MTR-PE/SIGOR clássicos partem das credenciais e obtêm o JWT via
+`/gettoken`; tokens diretos de MTR-PE/SIGOR não passam por esse cache. O cache dura 5 minutos
+(ou menos, se o JWT vencer antes) e fica em memória + arquivo `0600` sob
+`$XDG_RUNTIME_DIR/openmtr/session` (fallback `$XDG_CACHE_HOME/openmtr/session` ou
+`~/.cache/openmtr/session`). `OPENMTR_NO_SESSION_CACHE=1` desliga o arquivo; o cache em memória
+do processo continua evitando repetição dentro de um lote.
 
 Configuração (`open-mtr-config.toml`) e dump de um período:
 
