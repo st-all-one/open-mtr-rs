@@ -1,40 +1,14 @@
 # 13 — CLI `openmtr` e pipeline de dump
 
-> Contrato operacional do binário `openmtr`: configuração multi-conta, dump
-> multi-sistema, arquivos gerados e release via pipeline. O dump é a parte do
-> CLI com maior superfície de dados; o restante da superfície está descrito em
-> [`../plan/cli/03_superficie_cli.md`](../../wiki/plan/cli/03_superficie_cli.md).
+> Contrato operacional do binário `openmtr` para o **dump**. Instalação,
+> login/config, superfície completa, `batch` e códigos de saída estão em
+> [`14-cli.md`](14-cli.md); a referência de flags é
+> [`14-cli-reference.md`](14-cli-reference.md).
 
 ## 1. Instalação e atualização
 
-A pipeline de release publica binários por plataforma em
-`github.com/st-all-one/open-mtr-rs/releases`:
-
-| Plataforma | Asset |
-|---|---|
-| Linux x86_64 | `openmtr-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz` |
-| Linux ARM64 | `openmtr-vX.Y.Z-aarch64-unknown-linux-musl.tar.gz` |
-| macOS Apple Silicon | `openmtr-vX.Y.Z-aarch64-apple-darwin.tar.gz` |
-| macOS Intel | `openmtr-vX.Y.Z-x86_64-apple-darwin.tar.gz` |
-| Windows x86_64 | `openmtr-vX.Y.Z-x86_64-pc-windows-msvc.zip` |
-| Windows ARM64 | `openmtr-vX.Y.Z-aarch64-pc-windows-msvc.zip` |
-
-Instalação via script (verifica SHA-256 e instala atomicamente):
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | sh
-openmtr --version
-```
-
-Atualização pelo próprio binário:
-
-```sh
-openmtr self update --check
-openmtr self update
-```
-
-O `self update` consulta `/releases/latest`, baixa `sha256sums.txt`, valida o
-hash do asset e substitui o executável. `OPENMTR_VERSION` força uma tag.
+Instalação via release, source, `--uninstall` e `openmtr self update` estão
+documentados em [`14-cli.md#1-instalação-e-atualização`](14-cli.md#1-instalação-e-atualização).
 
 ## 2. Configuração multi-conta
 
