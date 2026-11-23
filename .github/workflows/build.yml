@@ -57,6 +57,17 @@ jobs:
       - run: bash -n scripts/release-notes.sh
       - run: bash -n scripts/gen-cli-docs.sh
 
+  docker:
+    name: docker build + openmtr smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Constrói a imagem de verdade e prova que o binário da CLI roda nela.
+      # O pin do builder (rust:1.100-slim-bookworm) está no Dockerfile.
+      - run: docker build --tag openmtr:ci .
+      - run: docker run --rm openmtr:ci openmtr --version
+
   supply-chain:
     name: deny + audit + machete + typos
     runs-on: ubuntu-latest

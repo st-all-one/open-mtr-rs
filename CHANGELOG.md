@@ -4,6 +4,39 @@ Todas as mudanças relevantes do openMTR/CLI. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa
 versionamento semântico.
 
+## [0.2.1] - 2026-11-23
+
+Revisão de manutenção para Rust 1.100: supply chain, imagem Docker e
+determinismo testado.
+
+### Corrigido
+
+- Supply chain (`make ci` estava vermelho): `url` 2.5.8→2.5.9
+  (RUSTSEC-2026-0592) e `rustix` 1.1.5→1.1.6 (RUSTSEC-2026-0486). O resolver
+  v3 (MSRV-aware) não sobe esses crates sozinho; o pin explícito é necessário.
+- `RUSTSEC-2026-0543` (`chrono` unmaintained) documentado como ignore no
+  `deny.toml` com justificativa; a migração para `time`/`jiff` fica registrada
+  como tarefa de revitalização.
+- `Dockerfile` reescrito para o layout atual (`core/`, `cli/`, `napi/`,
+  `uniffi/`, `wasm/`): sem `deno_napi`, sem stubs de `core/src/client`,
+  `cargo build --locked` por crate, runtime `debian:bookworm-slim` enxuto com
+  `openmtr` validado no build. Bindings Python são opt-in
+  (`--build-arg ENABLE_PYTHON_BINDINGS=1`).
+
+### Adicionado
+
+- Job `docker` no CI: constrói a imagem e roda `openmtr --version` nela
+  (fecha a dívida §4.6 do `AGENTS.md`).
+- Testes de determinismo do cliente: o `IdGenerator`/`Clock` injetados via
+  builder controlam o `id` do envelope e o `today()` das consultas, com
+  transporte fake síncrono (sem rede/timers).
+
+### Alterado
+
+- `AGENTS.md` §4: dívidas concluídas (unwrap/expect, `BTreeMap`, `RefCell`,
+  Dockerfile) marcadas como feitas; abertas (split dos adapters, `missing_docs`,
+  herança de lints do `cli`) seguem registradas.
+
 ## [0.2.0] - 2026-11-15
 
 ### Adicionado
