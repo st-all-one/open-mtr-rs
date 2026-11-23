@@ -1,3 +1,5 @@
+//! Descoberta de endpoints do MTR-PE ao vivo (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

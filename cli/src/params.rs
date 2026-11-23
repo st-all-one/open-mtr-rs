@@ -1,8 +1,10 @@
+//! Conversão dos `params` JSON do batch em tipos de domínio.
 use crate::error::CliError;
 use open_mtr_core::openmtr::domain::newtypes::DataMtr;
 use open_mtr_core::openmtr::domain::{FiltroCdf, FiltroMtr, Periodo};
 use serde_json::Value;
 
+/// Lê `periodo` com `dataInicial`/`dataFinal` no formato `dd-MM-yyyy`; ausência resulta em `None`.
 pub fn periodo_from_json(v: &Value) -> Result<Option<Periodo>, CliError> {
     let Some(per) = v.get("periodo") else {
         return Ok(None);
@@ -22,6 +24,7 @@ pub fn periodo_from_json(v: &Value) -> Result<Option<Periodo>, CliError> {
         .map_err(|e| CliError::Usage(e.to_string()))
 }
 
+/// Constrói `FiltroMtr`: `numeros`, `pagina`, `tamanho` e `detalhado` são opcionais, com validação de faixa.
 pub fn filtro_mtr_from_json(v: &Value) -> Result<FiltroMtr, CliError> {
     let mut f = FiltroMtr {
         periodo: periodo_from_json(v)?,
@@ -42,6 +45,7 @@ pub fn filtro_mtr_from_json(v: &Value) -> Result<FiltroMtr, CliError> {
     Ok(f)
 }
 
+/// Constrói `FiltroCdf`: `codigos` opcional e o mesmo `periodo` dos filtros de MTR.
 pub fn filtro_cdf_from_json(v: &Value) -> Result<FiltroCdf, CliError> {
     let mut f = FiltroCdf {
         periodo: periodo_from_json(v)?,
@@ -72,6 +76,7 @@ pub fn string_array(v: &Value, field: &str) -> Result<Vec<String>, CliError> {
         .collect()
 }
 
+/// Desserializa itens de um array JSON, ou de um objeto com exatamente um array.
 pub fn parse_items<T: serde::de::DeserializeOwned>(v: &Value) -> Result<Vec<T>, CliError> {
     let array = match v {
         Value::Array(_) => v.clone(),
@@ -95,6 +100,7 @@ pub fn parse_items<T: serde::de::DeserializeOwned>(v: &Value) -> Result<Vec<T>, 
     serde_json::from_value(array).map_err(|e| CliError::Usage(format!("params inválidos: {e}")))
 }
 
+/// Analisa `params` de string JSON, `-` (stdin) ou ausência (`{}`).
 pub fn parse_params(raw: Option<&str>) -> Result<Value, CliError> {
     match raw {
         Some("-") => {

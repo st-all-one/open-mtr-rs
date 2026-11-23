@@ -3,11 +3,16 @@ use async_trait::async_trait;
 use super::{HttpRequest, HttpResponse, HttpTransport};
 use crate::openmtr::error::OpenMTRError;
 
+/// Implementação nativa de [`HttpTransport`] baseada em `reqwest`.
 pub struct ReqwestTransport {
     client: reqwest::Client,
 }
 
 impl ReqwestTransport {
+    /// Cria o transporte com o timeout aplicado a cada requisição.
+    ///
+    /// Falha com [`OpenMTRError::network`] se o cliente `reqwest` não puder
+    /// ser construído.
     pub fn new(timeout: std::time::Duration) -> Result<Self, OpenMTRError> {
         let client = reqwest::Client::builder()
             .timeout(timeout)

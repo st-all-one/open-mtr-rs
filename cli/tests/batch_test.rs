@@ -1,3 +1,20 @@
+//! Testes do protocolo de lote (JSONL) da CLI.
+
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte de integração: atalhos de fixture e verificação de saída são legítimos"
+)]
+
 use open_mtr_cli::account::Account;
 use open_mtr_cli::batch::{BatchOptions, run_to};
 use open_mtr_cli::config::{CliConfig, Defaults, RawAccount};

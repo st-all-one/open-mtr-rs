@@ -16,9 +16,17 @@ fn expires_at(ttl_secs: u64) -> Instant {
         .unwrap_or_else(Instant::now)
 }
 
+/// Gerencia o access token JWT em cache e o refresh token dos portais SINIR/MTR.
+///
+/// O access token é considerado válido até [`Self::token`] devolver `None`,
+/// momento em que o cliente HTTP dispara a renovação via refresh token.
+/// O TTL de um token em cache é limitado a 7 dias (`MAX_TOKEN_TTL_SECS`) e
+/// reduzido de 60 segundos para renovação antecipada.
 pub struct TokenManager {
+    /// Token de integração/refresh usado como portador na chamada de renovação.
     pub integration_token: String,
     cached: Option<CachedToken>,
+    /// URL absoluta do endpoint de renovação; `None` desabilita a renovação.
     pub refresh_url: Option<String>,
 }
 
@@ -28,6 +36,10 @@ struct CachedToken {
 }
 
 impl TokenManager {
+    /// Cria um gerenciador vazio a partir de um token de integração/refresh.
+    ///
+    /// Não há access token em cache nem URL de refresh até [`Self::set_refresh_url`]
+    /// e [`Self::set_cached_token`] serem chamados.
     #[allow(
         dead_code,
         reason = "campo/helper mantido para compatibilidade da API e testes"
@@ -74,10 +86,12 @@ impl TokenManager {
         }
     }
 
+    /// Define a URL absoluta usada para renovar o access token.
     pub fn set_refresh_url(&mut self, url: impl Into<String>) {
         self.refresh_url = Some(url.into());
     }
 
+    /// Devolve o access token em cache se ainda não expirou, ou `None` caso contrário.
     #[must_use]
     pub fn token(&self) -> Option<&str> {
         self.cached.as_ref().and_then(|cached| {
@@ -89,6 +103,7 @@ impl TokenManager {
         })
     }
 
+    /// Indica se não há access token válido em cache (renovação necessária).
     #[allow(
         dead_code,
         reason = "campo/helper mantido para compatibilidade da API e testes"
@@ -98,6 +113,10 @@ impl TokenManager {
         self.token().is_none()
     }
 
+    /// Devolve `(URL de refresh, token de integração)` quando a renovação é necessária.
+    ///
+    /// Só devolve algo se a URL de refresh estiver definida e o access token
+    /// tiver expirado; caso contrário, `None`.
     #[allow(
         dead_code,
         reason = "campo/helper mantido para compatibilidade da API e testes"
@@ -112,12 +131,19 @@ impl TokenManager {
         }
     }
 
+    /// Devolve `(URL de refresh, token de integração)` incondicionalmente, se a URL existe.
+    ///
+    /// Usado pelo cliente HTTP para forçar a renovação mesmo com token válido.
     #[must_use]
     pub fn force_refresh_data(&self) -> Option<(String, String)> {
         let url = self.refresh_url.clone()?;
         Some((url, self.integration_token.clone()))
     }
 
+    /// Armazena um access token, inferindo a expiração do claim `exp` do JWT.
+    ///
+    /// Sem `exp` válido, assume 8 horas. O TTL é limitado a 7 dias e reduzido
+    /// em 60 segundos para garantir renovação antes da expiração real.
     pub fn set_cached_token(&mut self, access_token: String) {
         let now_secs = crate::openmtr::client::http::now_unix_secs();
         let ttl = Self::extract_expiry(&access_token)
@@ -132,6 +158,9 @@ impl TokenManager {
         info!("Token refreshed successfully");
     }
 
+    /// Extrai o claim `exp` (epoch Unix em segundos) do payload de um JWT.
+    ///
+    /// Devolve `None` se o token não for um JWT decodificável ou não tiver `exp`.
     #[must_use]
     pub fn extract_expiry(jwt: &str) -> Option<u64> {
         use base64::Engine;
@@ -146,6 +175,7 @@ impl TokenManager {
         claims.get("exp")?.as_u64()
     }
 
+    /// Devolve o token de integração/refresh configurado.
     #[allow(
         dead_code,
         reason = "campo/helper mantido para compatibilidade da API e testes"

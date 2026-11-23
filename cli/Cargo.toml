@@ -12,8 +12,8 @@ name = "openmtr"
 path = "src/main.rs"
 
 # Intenção explícita: o CLI ainda não herda os lints do workspace (dívida — AGENTS.md §4, item 7).
-# Um `[lints]` vazio satisfaz `cargo::missing_lints_inheritance` sem ativar os níveis.
 [lints]
+workspace = true
 
 [dependencies]
 open-mtr-core = { path = "../core", features = ["native-http"] }

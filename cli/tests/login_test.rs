@@ -1,5 +1,22 @@
+//! Testes do login multi-sistema e do cache de sessão.
+
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte de integração: atalhos de fixture e verificação de saída são legítimos"
+)]
+
 use clap::Parser;
-use open_mtr_cli::account::Account;
+use open_mtr_cli::account::{Account, AccountScope};
 use open_mtr_cli::batch::{BatchOptions, run_to};
 use open_mtr_cli::cli::Cli;
 use open_mtr_cli::config::{CliConfig, Defaults};
@@ -124,12 +141,14 @@ async fn batch_reuses_access_token_within_ttl() {
     let mut out = Vec::new();
     run_to(&rt, &opts, &mut out).await.expect("batch");
 
-    let lines: Vec<serde_json::Value> = String::from_utf8(out)
-        .expect("utf8")
-        .lines()
-        .map(|line| serde_json::from_str(line).expect("json"))
-        .collect();
-    assert_eq!(lines.len(), 2);
+    // Cada linha precisa ser um JSON válido; o lote tem duas operações.
+    let text = String::from_utf8(out).expect("utf8");
+    let mut total = 0;
+    for line in text.lines() {
+        serde_json::from_str::<serde_json::Value>(line).expect("json");
+        total += 1;
+    }
+    assert_eq!(total, 2, "duas operações no lote");
     server.verify().await;
 }
 
@@ -184,11 +203,15 @@ async fn classic_mtrpe_login_is_cached_between_clients() {
 #[test]
 fn login_rejects_scope_flags() {
     let rt = runtime(r#"{"system":"sinir","token":"t"}"#);
-    assert!(rt.select(&["outra".to_string()], None, &[], false).is_err());
-    assert!(rt.select(&[], Some("sinir"), &[], false).is_err());
-    assert!(rt.select(&[], None, &["tag".to_string()], false).is_err());
-    assert!(rt.select(&[], None, &[], true).is_err());
-    assert_eq!(rt.select(&[], None, &[], false).expect("login").len(), 1);
+    // Qualquer filtro explícito é incompatível com `--login` (a sessão é única).
+    assert!(
+        rt.select(AccountScope::Ids(&["outra".to_string()]))
+            .is_err()
+    );
+    assert!(rt.select(AccountScope::System("sinir")).is_err());
+    assert!(rt.select(AccountScope::Tags(&["tag".to_string()])).is_err());
+    // `All` é o escopo padrão (nenhuma flag): resolve a conta única do login.
+    assert_eq!(rt.select(AccountScope::All).expect("login").len(), 1);
 }
 
 #[tokio::test]

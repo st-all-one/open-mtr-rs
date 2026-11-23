@@ -1,3 +1,5 @@
+//! Erros do SINIR com wiremock.
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

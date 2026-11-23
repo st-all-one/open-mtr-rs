@@ -1,4 +1,4 @@
-use crate::account::Account;
+use crate::account::{Account, AccountScope};
 use crate::batch::{self, BatchOptions};
 use crate::dump::{self, DumpOptions};
 use crate::error::CliError;
@@ -6,13 +6,14 @@ use crate::runtime::Runtime;
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 
 use super::{AccountCmd, BatchArgs, CdfCmd, ConfigCmd, DumpArgs, MtrCmd, RefCmd};
+use crate::output::OutputFormat;
 
 mod cdf;
 mod io;
 mod mtr;
 mod ref_commands;
 
-pub fn parse_fixed_time(raw: Option<&str>) -> Result<Option<DateTime<Utc>>, CliError> {
+pub(super) fn parse_fixed_time(raw: Option<&str>) -> Result<Option<DateTime<Utc>>, CliError> {
     let Some(raw) = raw else {
         return Ok(None);
     };
@@ -30,7 +31,8 @@ pub fn parse_fixed_time(raw: Option<&str>) -> Result<Option<DateTime<Utc>>, CliE
     )))
 }
 
-pub fn run_account(rt: &Runtime, sub: AccountCmd) -> Result<(), CliError> {
+#[allow(clippy::print_stdout, reason = "CLI: a saída padrão é o produto")]
+pub(super) fn run_account(rt: &Runtime, sub: AccountCmd) -> Result<(), CliError> {
     match sub {
         AccountCmd::List => {
             for a in &rt.accounts {
@@ -42,30 +44,35 @@ pub fn run_account(rt: &Runtime, sub: AccountCmd) -> Result<(), CliError> {
                     a.tags.join(",")
                 );
             }
-            Ok(())
         }
         AccountCmd::Test { id } => {
             let acc = find_account(rt, Some(&id))?;
-            println!("ok: {} ({})", id, acc.system_slug());
-            Ok(())
+            println!("ok: {id} ({})", acc.system_slug());
         }
     }
+    Ok(())
 }
 
-pub fn run_config(
+#[allow(clippy::print_stdout, reason = "CLI: a saída padrão é o produto")]
+pub(super) fn run_config(
     config_path: &std::path::Path,
     rt: &Runtime,
     sub: ConfigCmd,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     match sub {
         ConfigCmd::Validate => {
-            println!("config ok: {} contas", rt.accounts.len());
-            Ok(())
+            let count = rt.accounts.len();
+            println!("config ok: {count} contas");
         }
         ConfigCmd::Migrate { dry_run } => {
-            let out = crate::migrate::migrate(config_path, dry_run)?;
-            if json {
+            let mode = if dry_run {
+                crate::migrate::WriteMode::DryRun
+            } else {
+                crate::migrate::WriteMode::Apply
+            };
+            let out = crate::migrate::migrate(config_path, mode)?;
+            if matches!(format, OutputFormat::Json) {
                 crate::output::print_json(&serde_json::json!({
                     "config": config_path.display().to_string(),
                     "dry_run": out.dry_run,
@@ -75,61 +82,65 @@ pub fn run_config(
                     "backup": out.backup.as_ref().map(|p| p.display().to_string()),
                 }));
             } else if out.changed {
-                println!(
-                    "migrado {}: config_version {} -> {}{}",
-                    config_path.display(),
-                    out.from_version.unwrap_or(0),
-                    out.to_version,
-                    out.backup
-                        .as_ref()
-                        .map_or_default(|p| format!(" (backup: {})", p.display()))
-                );
+                let path = config_path.display();
+                let from = out.from_version.unwrap_or(0);
+                let to = out.to_version;
+                let backup = out
+                    .backup
+                    .as_ref()
+                    .map_or_default(|p| format!(" (backup: {})", p.display()));
+                println!("migrado {path}: config_version {from} -> {to}{backup}");
             } else {
-                println!("config já está em config_version {}", out.to_version);
+                let version = out.to_version;
+                println!("config já está em config_version {version}");
             }
-            Ok(())
         }
     }
+    Ok(())
 }
 
-pub async fn run_mtr(
+pub(super) async fn run_mtr(
     rt: &Runtime,
     sub: MtrCmd,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
-    mtr::run(rt, sub, fixed_time, json).await
+    mtr::run(rt, sub, fixed_time, format).await
 }
 
-pub async fn run_cdf(
+pub(super) async fn run_cdf(
     rt: &Runtime,
     sub: CdfCmd,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
-    cdf::run(rt, sub, fixed_time, json).await
+    cdf::run(rt, sub, fixed_time, format).await
 }
 
-pub async fn run_ref(
+pub(super) async fn run_ref(
     rt: &Runtime,
     sub: RefCmd,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
-    ref_commands::run(rt, sub, fixed_time, json).await
+    ref_commands::run(rt, sub, fixed_time, format).await
 }
 
-pub async fn run_dump(
+pub(super) async fn run_dump(
     rt: &Runtime,
     args: DumpArgs,
     fixed_time: Option<DateTime<Utc>>,
 ) -> Result<(), CliError> {
-    let sel = rt.select(
-        &args.account,
-        args.system.as_deref(),
-        &args.tag,
-        args.all_accounts,
-    )?;
+    let scope = if args.all_accounts {
+        AccountScope::All
+    } else if !args.account.is_empty() {
+        AccountScope::Ids(&args.account)
+    } else if let Some(system) = args.system.as_deref() {
+        AccountScope::System(system)
+    } else {
+        AccountScope::Tags(&args.tag)
+    };
+    let sel = rt.select(scope)?;
     if sel.is_empty() {
         return Err(CliError::Usage("dump exige escopo de conta".into()));
     }
@@ -149,7 +160,7 @@ pub async fn run_dump(
     dump::run(&rt.config, &rt.cache, &sel, &opts).await
 }
 
-pub async fn run_batch(
+pub(super) async fn run_batch(
     rt: &Runtime,
     args: BatchArgs,
     fixed_time: Option<DateTime<Utc>>,

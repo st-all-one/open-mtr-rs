@@ -1,3 +1,20 @@
+//! Testes da normalização de linhas para CSV/JSONL.
+
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte de integração: atalhos de fixture e verificação de saída são legítimos"
+)]
+
 use chrono::NaiveDate;
 use open_mtr_cli::normalize::{CSV_HEADER, DumpRow, csv_line};
 use open_mtr_core::openmtr::domain::{CpfCnpj, Mtr, Parte, Residuo, StatusMtr};

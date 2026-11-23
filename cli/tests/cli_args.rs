@@ -1,3 +1,20 @@
+//! Testes de parsing dos argumentos da CLI.
+
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte de integração: atalhos de fixture e verificação de saída são legítimos"
+)]
+
 use clap::Parser;
 use open_mtr_cli::cli::{CdfCmd, Cli, Command, MtrCmd, RefCmd, RefTable};
 

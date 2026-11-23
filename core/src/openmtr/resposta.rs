@@ -3,13 +3,25 @@ use uuid::Uuid;
 
 use crate::openmtr::error::OpenMTRError;
 
+/// Envelope padrão devolvido por todas as operações do cliente openMTR.
+///
+/// `id` identifica a operação e é fornecido pelo gerador injetado no cliente
+/// (via [`OpenMtrClientBuilder::id_generator`](crate::openmtr::open_mtr_client::OpenMtrClientBuilder::id_generator)),
+/// o que torna o envelope reproduzível em testes. `ok`/`status` descrevem o
+/// resultado, `dados` traz os registros e `erros` os problemas por item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Resposta<T> {
+    /// Identificador da operação (UUID), oriundo do gerador de IDs do cliente.
     pub id: Uuid,
+    /// Indica se a operação foi concluída com sucesso.
     pub ok: bool,
+    /// Código HTTP lógico do resultado (por exemplo 200 ou 400).
     pub status: u16,
+    /// Mensagem de status legível; pode ser vazia quando o resultado é expresso só por `ok`.
     pub mensagem: String,
+    /// Registros devolvidos pela operação; vazio quando não há dados.
     pub dados: Vec<T>,
+    /// Problemas encontrados, cada um com detalhes RFC 9457 (problem+json).
     pub erros: Vec<OpenMTRError>,
     /// Total de registros disponíveis (para paginação).
     /// Preenchido quando a API retorna totalRecords.
@@ -18,6 +30,7 @@ pub struct Resposta<T> {
 }
 
 impl<T> Resposta<T> {
+    /// Cria um envelope de sucesso (status 200, sem erros e sem mensagem).
     #[must_use]
     pub fn sucesso(id: Uuid, dados: Vec<T>) -> Self {
         Self {
@@ -31,6 +44,7 @@ impl<T> Resposta<T> {
         }
     }
 
+    /// Cria um envelope de falha (status 400) contendo os erros informados.
     #[must_use]
     pub fn com_erros(id: Uuid, erros: Vec<OpenMTRError>) -> Self {
         Self {
@@ -44,6 +58,7 @@ impl<T> Resposta<T> {
         }
     }
 
+    /// Cria um envelope de sucesso com uma mensagem descritiva.
     pub fn com_mensagem(id: Uuid, dados: Vec<T>, mensagem: impl Into<String>) -> Self {
         Self {
             id,
@@ -56,6 +71,7 @@ impl<T> Resposta<T> {
         }
     }
 
+    /// Cria um envelope de sucesso com o total de registros disponíveis (paginação).
     #[must_use]
     pub fn com_total(id: Uuid, dados: Vec<T>, total: i64) -> Self {
         Self {
@@ -69,6 +85,7 @@ impl<T> Resposta<T> {
         }
     }
 
+    /// Retorna `true` quando há problemas registrados em `erros`.
     #[must_use]
     pub fn tem_erros(&self) -> bool {
         !self.erros.is_empty()

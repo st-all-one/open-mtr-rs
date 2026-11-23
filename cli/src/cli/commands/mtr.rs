@@ -1,6 +1,8 @@
 use super::find_account;
 use super::io::{print_one_or_many, write_downloads};
+use crate::account::AccountScope;
 use crate::error::CliError;
+use crate::output::OutputFormat;
 use crate::params::{filtro_mtr_from_json, parse_items, parse_params, string_array};
 use crate::runtime::Runtime;
 use chrono::{DateTime, Utc};
@@ -14,7 +16,7 @@ pub(super) async fn run(
     rt: &Runtime,
     sub: MtrCmd,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     match sub {
         MtrCmd::Consultar {
@@ -25,18 +27,14 @@ pub(super) async fn run(
             all_accounts,
             params,
         } => {
-            consultar(
-                rt,
-                numero,
-                account,
-                system,
-                tag,
-                all_accounts,
-                params,
-                fixed_time,
-                json,
-            )
-            .await
+            let ids: Vec<String> = account.into_iter().collect();
+            let flags = ScopeFlags {
+                ids: &ids,
+                system: system.as_deref(),
+                tags: &tag,
+                all: all_accounts,
+            };
+            consultar(rt, numero, flags.to_scope(), params, fixed_time, format).await
         }
         MtrCmd::Criar { account, params } => {
             write(
@@ -45,7 +43,7 @@ pub(super) async fn run(
                 &params,
                 fixed_time,
                 WriteKind::Criar,
-                json,
+                format,
             )
             .await
         }
@@ -56,7 +54,7 @@ pub(super) async fn run(
                 &params,
                 fixed_time,
                 WriteKind::Receber,
-                json,
+                format,
             )
             .await
         }
@@ -67,7 +65,7 @@ pub(super) async fn run(
                 &params,
                 fixed_time,
                 WriteKind::Cancelar,
-                json,
+                format,
             )
             .await
         }
@@ -78,7 +76,7 @@ pub(super) async fn run(
                 &params,
                 fixed_time,
                 WriteKind::Modificar,
-                json,
+                format,
             )
             .await
         }
@@ -89,7 +87,7 @@ pub(super) async fn run(
                 &params,
                 fixed_time,
                 WriteKind::Aceitar,
-                json,
+                format,
             )
             .await
         }
@@ -106,29 +104,22 @@ pub(super) async fn run(
                 params,
                 fixed_time,
                 &out,
-                json,
+                format,
             )
             .await
         }
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "espelha as flags do verbo consultar"
-)]
 async fn consultar(
     rt: &Runtime,
-    numero: Option<String>,
-    account: Option<String>,
-    system: Option<String>,
-    tag: Vec<String>,
-    all_accounts: bool,
+    alvo: Option<String>,
+    scope: AccountScope<'_>,
     params: Option<String>,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
-    let value = match (numero, params) {
+    let value = match (alvo, params) {
         (Some(numero), None) => serde_json::json!({ "numeros": [numero] }),
         (None, Some(raw)) => parse_params(Some(&raw))?,
         (None, None) => {
@@ -142,8 +133,7 @@ async fn consultar(
             ));
         }
     };
-    let ids: Vec<String> = account.into_iter().collect();
-    let sel = rt.select(&ids, system.as_deref(), &tag, all_accounts)?;
+    let sel = rt.select(scope)?;
     if sel.is_empty() {
         return Err(CliError::Usage("escopo de conta obrigatório".into()));
     }
@@ -162,7 +152,29 @@ async fn consultar(
             "data": data,
         }));
     }
-    print_one_or_many(json, results)
+    print_one_or_many(format, results)
+}
+
+/// Flags de escopo do verbo `consultar`, convertidas em um [`AccountScope`].
+struct ScopeFlags<'a> {
+    ids: &'a [String],
+    system: Option<&'a str>,
+    tags: &'a [String],
+    all: bool,
+}
+
+impl ScopeFlags<'_> {
+    fn to_scope(&self) -> AccountScope<'_> {
+        if self.all {
+            AccountScope::All
+        } else if !self.ids.is_empty() {
+            AccountScope::Ids(self.ids)
+        } else if let Some(system) = self.system {
+            AccountScope::System(system)
+        } else {
+            AccountScope::Tags(self.tags)
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -180,7 +192,7 @@ async fn write(
     params: &str,
     fixed_time: Option<DateTime<Utc>>,
     kind: WriteKind,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
     let value = parse_params(Some(params))?;
@@ -211,7 +223,7 @@ async fn write(
         }
     }
     .map_err(|e| CliError::Internal(e.to_string()))?;
-    super::io::print_value(json, &result)
+    super::io::print_value(format, &result)
 }
 
 async fn download(
@@ -221,7 +233,7 @@ async fn download(
     params: Option<String>,
     fixed_time: Option<DateTime<Utc>>,
     out: &std::path::Path,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     let numeros = match (numero, params) {
         (Some(numero), None) => vec![numero],
@@ -245,5 +257,5 @@ async fn download(
         .download_mtrs(numeros)
         .await
         .map_err(|e| CliError::Network(e.to_string()))?;
-    write_downloads(resp.dados, out, json)
+    write_downloads(resp.dados, out, format)
 }

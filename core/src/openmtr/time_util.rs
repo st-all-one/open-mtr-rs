@@ -4,13 +4,20 @@ use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
 /// Fonte de tempo injetável para testes determinísticos.
+///
+/// O cliente usa `now`/`today` para obrigações sensíveis ao tempo (datas de
+/// manifestos e filtros); injetar um [`FixedClock`] torna esses valores
+/// reproduzíveis em golden tests.
 pub trait Clock: Send + Sync {
+    /// Instante atual em UTC.
     fn now(&self) -> DateTime<Utc>;
 
+    /// Data civil (sem fuso) derivada de [`Clock::now`]; usada como `today()` do contexto.
     fn today(&self) -> NaiveDate {
         self.now().date_naive()
     }
 
+    /// Segundos desde o epoch Unix (a partir de `now()`), nunca negativo.
     fn now_unix_secs(&self) -> u64 {
         self.now().timestamp().max(0).cast_unsigned()
     }
@@ -18,6 +25,7 @@ pub trait Clock: Send + Sync {
 
 /// Gerador de identificadores injetável para snapshots/golden tests.
 pub trait IdGenerator: Send + Sync {
+    /// Gera o identificador (UUID) usado no envelope de resposta e nos erros.
     fn new_id(&self) -> Uuid;
 }
 
@@ -48,6 +56,7 @@ pub struct FixedClock {
 }
 
 impl FixedClock {
+    /// Cria um relógio fixo no instante UTC informado.
     #[must_use]
     pub fn new(now: DateTime<Utc>) -> Self {
         Self { now }
@@ -81,11 +90,13 @@ impl IdGenerator for SequentialIdGenerator {
     }
 }
 
+/// Envolve um relógio em `Arc` para compartilhá-lo entre o cliente e o contexto.
 #[must_use]
 pub fn shared_clock(clock: impl Clock + 'static) -> Arc<dyn Clock> {
     Arc::new(clock)
 }
 
+/// Envolve um gerador de IDs em `Arc` para compartilhá-lo entre o cliente e o contexto.
 #[must_use]
 pub fn shared_id_generator(generator: impl IdGenerator + 'static) -> Arc<dyn IdGenerator> {
     Arc::new(generator)

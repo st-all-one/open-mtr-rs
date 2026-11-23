@@ -7,17 +7,27 @@ use crate::openmtr::system::System;
 
 use super::error::OpenMTRError;
 
+/// Configuração validada usada pelo cliente HTTP do openMTR.
+///
+/// Construída via [`Config::builder`], que normaliza e valida `base_url`:
+/// a URL deve usar o esquema `http` ou `https` e as barras finais são
+/// removidas. O valor padrão é a URL do sistema escolhido.
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Sistema de origem (SINIR, SIGOR, MTR-PE, ...).
     pub system: System,
+    /// URL base normalizada, sem barra final, usada como prefixo dos endpoints.
     pub base_url: String,
+    /// Token de integração/refresh usado na autenticação Bearer.
     pub integration_token: Option<String>,
+    /// Timeout aplicado a cada requisição pelo transporte.
     pub timeout: Duration,
     /// Limite de requisições simultâneas usado pelo cliente HTTP.
     ///
     /// O nome histórico é `max_rps`; na prática ele limita a concorrência de
     /// rede para evitar estourar o rate limit das APIs estaduais.
     pub max_rps: u32,
+    /// CNPJ do emitente, quando exigido pelo sistema.
     pub cnpj: Option<String>,
 }
 
@@ -43,6 +53,7 @@ impl Config {
 }
 
 impl Config {
+    /// Cria um builder com padrões: SINIR, 30s de timeout e `max_rps` 10.
     #[must_use]
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder {
@@ -57,6 +68,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone)]
+/// Builder de [`Config`], com validação de URL e limites na construção.
 pub struct ConfigBuilder {
     system: System,
     base_url: Option<String>,
@@ -68,38 +80,49 @@ pub struct ConfigBuilder {
 
 impl ConfigBuilder {
     #[must_use]
+    /// Define o sistema, cuja URL padrão é usada se `base_url` não for informada.
     pub fn system(mut self, s: System) -> Self {
         self.system = s;
         self
     }
 
+    /// Define a URL base; barras finais são removidas em [`Self::build`].
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = Some(url.into());
         self
     }
 
+    /// Define o token de integração/refresh.
     pub fn token(mut self, token: impl Into<String>) -> Self {
         self.integration_token = Some(token.into());
         self
     }
 
     #[must_use]
+    /// Define o timeout das requisições em segundos.
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout = Duration::from_secs(secs);
         self
     }
 
     #[must_use]
+    /// Define o limite de concorrência; zero é rejeitado em [`Self::build`].
     pub fn max_rps(mut self, rps: u32) -> Self {
         self.max_rps = rps;
         self
     }
 
+    /// Define o CNPJ do emitente.
     pub fn cnpj(mut self, cnpj: impl Into<String>) -> Self {
         self.cnpj = Some(cnpj.into());
         self
     }
 
+    /// Valida os valores e produz a [`Config`].
+    ///
+    /// Falha com [`OpenMTRError::config`] se `base_url` estiver vazia, não for
+    /// uma URL válida, usar esquema diferente de `http`/`https`, ou se
+    /// `max_rps` for zero.
     pub fn build(self) -> Result<Config, OpenMTRError> {
         let base_url = self
             .base_url
@@ -139,10 +162,15 @@ impl ConfigBuilder {
 }
 
 #[derive(Debug, Clone)]
+/// Credenciais de autenticação clássica (CPF + senha) usadas por alguns sistemas.
 pub struct Credenciais {
+    /// CPF do usuário, validado na construção de [`Cpf`].
     pub cpf: Cpf,
+    /// Senha de acesso ao portal.
     pub senha: String,
+    /// Número da unidade de lotação.
     pub unidade: u32,
+    /// CNPJ do emitente associado às credenciais.
     pub cnpj: String,
 }
 

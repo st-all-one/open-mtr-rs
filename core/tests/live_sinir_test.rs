@@ -1,3 +1,5 @@
+//! Suíte ao vivo do SINIR (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

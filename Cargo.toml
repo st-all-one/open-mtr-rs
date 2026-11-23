@@ -51,7 +51,8 @@ wasm-bindgen-test = "0.3"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
-missing_docs = "allow"  # dívida da revitalização: subir para "warn" quando a API pública estiver documentada
+# A API pública (core + bindings) está documentada; `make doc` roda `-D warnings`.
+missing_docs = "warn"
 unused_qualifications = "deny"
 unused_lifetimes = "deny"
 elided_lifetimes_in_paths = "deny"

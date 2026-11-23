@@ -1,3 +1,5 @@
+//! Script de build do binding UniFFI: gera o scaffolding a partir de `src/open_mtr.udl`.
+
 #[allow(
     clippy::expect_used,
     reason = "build script: falha de geração UniFFI deve abortar a compilação"

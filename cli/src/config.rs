@@ -1,48 +1,78 @@
+//! Leitura e validação do arquivo de configuração TOML da CLI.
+//!
+//! O arquivo tem `config_version = 1`, uma tabela `[defaults]` opcional e uma
+//! lista de contas `[[accounts]]`. Cada conta identifica um `system`
+//! (`sinir`, `sigor`, `mtr-pe`/`mtr_pe`/`mtrpe`, etc.), um `id` único, e
+//! credenciais via token (`token`/`token_env`) ou via par CPF/senha/unidade
+//! (`cpf`, `senha`/`senha_env`, `unidade`) — nunca ambos. `deny_unknown_fields`
+//! rejeita chaves desconhecidas. Segredos inline geram aviso; prefira as
+//! variantes `_env`, e em Unix o arquivo deve ter permissão `0600`.
+
 use crate::error::CliError;
 use open_mtr_core::openmtr::system::System;
 use serde::Deserialize;
 use std::path::Path;
 
+/// Uma conta declarada em `[[accounts]]` no TOML de configuração.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawAccount {
+    /// Identificador único da conta; usado por `--account` e no estado de retomada.
     pub id: String,
+    /// Rótulo legível da conta, opcional.
     #[serde(default)]
     pub label: Option<String>,
+    /// Sistema de origem; aceita `sinir`, `sigor`, `mtr-pe`/`mtr_pe`/`mtrpe` e equivalentes estaduais.
     pub system: String,
+    /// Etiquetas da conta para seleção por `--tag` (todas devem corresponder).
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Papel da conta: `transportadora`, `destinadora`, `receptora` ou `geradora` (padrão).
     #[serde(default)]
     pub access_type: Option<String>,
+    /// URL base da API, opcional; quando ausente usa a URL padrão do sistema.
     #[serde(default)]
     pub base_url: Option<String>,
+    /// Token de acesso inline; exclusivo com `token_env` e com credenciais clássicas.
     #[serde(default)]
     pub token: Option<String>,
+    /// Nome da variável de ambiente que contém o token; alternativa segura a `token`.
     #[serde(default)]
     pub token_env: Option<String>,
+    /// CPF da autenticação clássica; obrigatório quando não há token.
     #[serde(default)]
     pub cpf: Option<String>,
+    /// Senha inline da autenticação clássica; exclusiva com `senha_env`.
     #[serde(default)]
     pub senha: Option<String>,
+    /// Nome da variável de ambiente que contém a senha clássica.
     #[serde(default)]
     pub senha_env: Option<String>,
+    /// Unidade associada ao CPF na autenticação clássica; obrigatória sem token.
     #[serde(default)]
     pub unidade: Option<u32>,
+    /// CNPJ opcional da autenticação clássica.
     #[serde(default)]
     pub cnpj: Option<String>,
+    /// Limite de concorrência específico da conta; sobrepõe `defaults.max_concurrency`.
     #[serde(default)]
     pub max_concurrency: Option<u32>,
+    /// Habilita a conta; padrão `true` quando omitido.
     #[serde(default)]
     pub enabled: Option<bool>,
 }
 
+/// Valores padrão da tabela `[defaults]`, aplicados às contas que não os definem.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Defaults {
+    /// Janela de dias usada pelo dump ao dividir o período (padrão `30`).
     #[serde(default = "d_window")]
     pub dump_window_days: u32,
+    /// Concorrência máxima padrão (padrão `10`).
     #[serde(default = "d_conc")]
     pub max_concurrency: u32,
+    /// Timeout das requisições HTTP em segundos (padrão `30`).
     #[serde(default = "d_timeout")]
     pub timeout_secs: u64,
 }
@@ -67,13 +97,17 @@ impl Default for Defaults {
     }
 }
 
+/// Configuração raiz do arquivo TOML.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CliConfig {
+    /// Versão do formato; apenas `1` é suportada por este binário.
     #[serde(default = "d_cv")]
     pub config_version: u32,
+    /// Padrões globais de execução.
     #[serde(default)]
     pub defaults: Defaults,
+    /// Contas disponíveis; a seleção de escopo filtra as habilitadas.
     #[serde(default)]
     pub accounts: Vec<RawAccount>,
 }
@@ -83,17 +117,19 @@ fn d_cv() -> u32 {
 }
 
 impl CliConfig {
+    /// Lê `path`, analisa o TOML, valida o conteúdo e avisa sobre segredos inline.
     pub fn load(path: &Path) -> Result<Self, CliError> {
         let text = std::fs::read_to_string(path).map_err(|e| {
             CliError::Config(format!("não foi possível ler {}: {e}", path.display()))
         })?;
-        let cfg: CliConfig =
+        let cfg: Self =
             toml::from_str(&text).map_err(|e| CliError::Config(format!("TOML inválido: {e}")))?;
         cfg.validate()?;
         warn_inline_secrets(path, &cfg);
         Ok(cfg)
     }
 
+    /// Valida versão, ids únicos, sistemas, `access_type` e a combinação de credenciais.
     #[allow(
         clippy::excessive_nesting,
         reason = "validação linear de contas; extrair função prejudicaria a leitura"
@@ -214,6 +250,7 @@ fn warn_inline_secrets(path: &Path, cfg: &CliConfig) {
     }
 }
 
+/// Converte uma string de sistema em [`System`], mapeando falha para [`CliError::Config`].
 pub fn parse_system(s: &str) -> Result<System, CliError> {
     s.parse::<System>()
         .map_err(|_| CliError::Config(format!("sistema inválido: {s}")))

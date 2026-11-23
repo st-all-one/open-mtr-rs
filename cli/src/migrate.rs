@@ -1,23 +1,42 @@
+//! Migração de configuração legada para `config_version = 1`.
 use crate::config::CliConfig;
 use crate::error::CliError;
 use std::path::{Path, PathBuf};
 
+/// Modalidade de execução da migração (mutuamente exclusiva).
+#[derive(Clone, Copy, Debug)]
+pub enum WriteMode {
+    /// Apenas valida e calcula o resultado, sem gravar.
+    DryRun,
+    /// Grava backup e configuração migrada.
+    Apply,
+}
+
+/// Resultado de uma migração de configuração.
 pub struct MigrateOutcome {
+    /// `true` quando a versão precisou ser ajustada.
     pub changed: bool,
+    /// Versão encontrada no arquivo, ou `None` se ausente.
     pub from_version: Option<i64>,
+    /// Versão resultante (sempre `1`).
     pub to_version: i64,
+    /// Caminho do backup criado no modo `Apply` quando houve mudança.
     pub backup: Option<PathBuf>,
+    /// `true` no modo `DryRun`, que valida mas não grava nada.
     pub dry_run: bool,
 }
 
-pub fn migrate(path: &Path, dry_run: bool) -> Result<MigrateOutcome, CliError> {
+/// Migra a configuração em `path` para `config_version = 1`.
+pub fn migrate(path: &Path, mode: WriteMode) -> Result<MigrateOutcome, CliError> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| CliError::Config(format!("não foi possível ler {}: {e}", path.display())))?;
     let mut doc: toml_edit::DocumentMut = text
         .parse()
         .map_err(|e| CliError::Config(format!("TOML inválido: {e}")))?;
 
-    let current = doc.get("config_version").and_then(|v| v.as_integer());
+    let current = doc
+        .get("config_version")
+        .and_then(toml_edit::Item::as_integer);
     if let Some(v) = current
         && v > 1
     {
@@ -28,7 +47,8 @@ pub fn migrate(path: &Path, dry_run: bool) -> Result<MigrateOutcome, CliError> {
 
     let changed = current != Some(1);
     if changed {
-        doc["config_version"] = toml_edit::value(1);
+        doc.as_table_mut()
+            .insert("config_version", toml_edit::value(1));
     }
 
     let migrated = doc.to_string();
@@ -36,26 +56,26 @@ pub fn migrate(path: &Path, dry_run: bool) -> Result<MigrateOutcome, CliError> {
         .map_err(|e| CliError::Config(format!("TOML migrado inválido: {e}")))?;
     parsed.validate()?;
 
-    let mut backup = None;
-    if changed && !dry_run {
+    let backup = if changed && matches!(mode, WriteMode::Apply) {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs());
         let bak = PathBuf::from(format!("{}.bak.{stamp}", path.display()));
         std::fs::copy(path, &bak)
             .map_err(|e| CliError::Config(format!("criar backup {}: {e}", bak.display())))?;
         std::fs::write(path, &migrated)
             .map_err(|e| CliError::Config(format!("gravar {}: {e}", path.display())))?;
-        backup = Some(bak);
-    }
+        Some(bak)
+    } else {
+        None
+    };
 
     Ok(MigrateOutcome {
         changed,
         from_version: current,
         to_version: 1,
         backup,
-        dry_run,
+        dry_run: matches!(mode, WriteMode::DryRun),
     })
 }
 
@@ -74,7 +94,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let body = "[[accounts]]\nid = \"a\"\nsystem = \"sinir\"\ntoken = \"t\"\n";
         let p = write(dir.path(), body);
-        let out = migrate(&p, true).expect("migrate");
+        let out = migrate(&p, WriteMode::DryRun).expect("migrate");
         assert!(out.changed);
         assert_eq!(std::fs::read_to_string(&p).expect("read"), body);
         assert!(out.backup.is_none());
@@ -85,7 +105,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let body = "[[accounts]]\nid = \"a\"\nsystem = \"sinir\"\ntoken = \"t\"\n";
         let p = write(dir.path(), body);
-        let out = migrate(&p, false).expect("migrate");
+        let out = migrate(&p, WriteMode::Apply).expect("migrate");
         assert!(out.changed);
         assert!(out.backup.is_some());
         let migrated = std::fs::read_to_string(&p).expect("read");
@@ -98,7 +118,7 @@ mod tests {
         let body =
             "config_version = 1\n[[accounts]]\nid = \"a\"\nsystem = \"sinir\"\ntoken = \"t\"\n";
         let p = write(dir.path(), body);
-        let out = migrate(&p, false).expect("migrate");
+        let out = migrate(&p, WriteMode::Apply).expect("migrate");
         assert!(!out.changed);
         assert!(out.backup.is_none());
     }
@@ -109,6 +129,6 @@ mod tests {
         let body =
             "config_version = 2\n[[accounts]]\nid = \"a\"\nsystem = \"sinir\"\ntoken = \"t\"\n";
         let p = write(dir.path(), body);
-        assert!(migrate(&p, true).is_err());
+        assert!(migrate(&p, WriteMode::DryRun).is_err());
     }
 }

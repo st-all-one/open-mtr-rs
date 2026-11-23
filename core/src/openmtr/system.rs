@@ -2,20 +2,33 @@ use std::fmt;
 
 use crate::openmtr::error::OpenMTRError;
 
+/// Sistema de origem dos manifestos de transporte de resíduos (MTR).
+///
+/// Cada variante identifica um sistema (SINIR nacional, SIGOR ou um MTR
+/// estadual) e determina a URL base padrão e o adaptador usado pelo cliente.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum System {
+    /// SINIR nacional (admin.sinir.gov.br).
     Sinir,
+    /// SIGOR de São Paulo (cetesb.sp.gov.br).
     Sigor,
+    /// MTR de Pernambuco.
     MtrPe,
+    /// MTR do Ceará.
     MtrCe,
+    /// MTR de São Paulo.
     MtrSp,
+    /// MTR do Rio de Janeiro.
     MtrRj,
+    /// MTR de Minas Gerais.
     MtrMg,
+    /// MTR da Bahia.
     MtrBa,
 }
 
 impl System {
+    /// URL base padrão da API do sistema (por exemplo `https://admin.sinir.gov.br/api`).
     #[must_use]
     pub fn default_base_url(&self) -> &'static str {
         match self {
@@ -30,6 +43,10 @@ impl System {
         }
     }
 
+    /// Cria o adaptador correspondente ao sistema.
+    ///
+    /// Retorna `OpenMTRError::not_supported` para sistemas cujo adaptador ainda
+    /// não foi implementado.
     pub fn adapter(self) -> Result<Box<dyn crate::openmtr::adapters::MtrAdapter>, OpenMTRError> {
         match self {
             Self::Sinir => Ok(Box::new(crate::openmtr::adapters::sinir::SinirAdapter)),
@@ -42,6 +59,7 @@ impl System {
         }
     }
 
+    /// Nome legível do sistema (por exemplo `SINIR Nacional`), usado em logs e erros.
     #[must_use]
     pub fn nome(&self) -> &'static str {
         match self {

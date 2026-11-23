@@ -1,3 +1,9 @@
+//! Reexportações dos tipos mais usados da API openMTR.
+//!
+//! Inclui os tipos de domínio, o erro público, o cliente e seu builder, a
+//! autenticação clássica, o envelope [`crate::openmtr::resposta::Resposta`], o
+//! enum [`crate::openmtr::system::System`] e o relógio/gerador de IDs para
+//! testes determinísticos.
 pub use crate::openmtr::domain::{
     AceitarAlteracao, Acondicionamento, AlteracaoAceita, COMPATIBILIDADE_ACOND, CancelarMtr, Cdf,
     CdfEmitido, ClasseResiduo, Cnpj, Cpf, CpfCnpj, CriarMtr, CriarMtrComplementar, DataMtr,

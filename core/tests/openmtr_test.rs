@@ -1,3 +1,5 @@
+//! Testes de integração do cliente openMTR.
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

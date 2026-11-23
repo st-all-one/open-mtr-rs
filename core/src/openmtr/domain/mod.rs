@@ -1,3 +1,8 @@
+//! Modelo de domínio compartilhado pelos adaptadores SINIR, MTR-PE e SIGOR.
+//!
+//! Os tipos aqui representam o contrato de negócio do MTR, independente do
+//! sistema de origem: manifestos, partes, resíduos e suas tabelas de apoio.
+//! As reexportações formam a API pública usada diretamente pelos bindings.
 pub mod aceitar_alteracao;
 pub mod cancelamento;
 pub mod cdf;

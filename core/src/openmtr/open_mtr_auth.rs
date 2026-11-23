@@ -15,9 +15,13 @@ use crate::openmtr::system::System;
 #[serde(tag = "tipo", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum AuthParams {
+    /// Credenciais de CPF/CNPJ + senha + código de unidade (MTR-PE, SIGOR).
     CpfSenhaUnidade {
+        /// CPF do responsável (identificador usado no login).
         cpf: String,
+        /// Senha do responsável.
         senha: String,
+        /// Código numérico da unidade (posto de atendimento) no sistema.
         unidade: u32,
         /// CNPJ da empresa. Obrigatório no MTR-PE; ignorado em sistemas que
         /// não o exigem (ex.: SIGOR).
@@ -27,6 +31,7 @@ pub enum AuthParams {
 }
 
 impl AuthParams {
+    /// Construtor da variante `CpfSenhaUnidade` sem CNPJ (opcional conforme o sistema).
     #[must_use]
     pub fn cpf_senha_unidade(
         cpf: impl Into<String>,
@@ -72,6 +77,7 @@ pub struct OpenMtrClassicAuth {
 }
 
 impl OpenMtrClassicAuth {
+    /// Cria um builder de autenticação para o sistema informado.
     #[must_use]
     pub fn new(system: System) -> Self {
         Self {
@@ -93,23 +99,27 @@ impl OpenMtrClassicAuth {
         Self::new(system).params(params.clone()).build().await
     }
 
+    /// Define o sistema cujas credenciais serão usadas.
     #[must_use]
     pub fn base(mut self, system: System) -> Self {
         self.system = Some(system);
         self
     }
 
+    /// Sobrescreve a URL base padrão do sistema (útil em ambientes de homologação).
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = Some(url.into());
         self
     }
 
+    /// Define as credenciais usadas no fluxo de autenticação clássica.
     #[must_use]
     pub fn params(mut self, params: AuthParams) -> Self {
         self.params = Some(params);
         self
     }
 
+    /// Define o timeout da requisição de autenticação, em segundos.
     #[must_use]
     pub fn timeout_secs(mut self, secs: u64) -> Self {
         self.timeout = Some(Duration::from_secs(secs));

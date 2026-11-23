@@ -1,3 +1,5 @@
+//! Apoio compartilhado das suítes de integração.
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

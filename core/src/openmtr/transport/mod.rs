@@ -1,18 +1,34 @@
+//! Abstração de transporte HTTP usada pelo cliente do openMTR.
+//!
+//! O traço [`HttpTransport`](crate::openmtr::transport::HttpTransport) é o
+//! ponto de extensão/teste: implementações concretas (como
+//! `reqwest::ReqwestTransport` com a feature `native-http`, ou um transporte
+//! WASM) podem ser injetadas via `build_with_transport`. Os tipos
+//! [`HttpRequest`](crate::openmtr::transport::HttpRequest) e
+//! [`HttpResponse`](crate::openmtr::transport::HttpResponse) são a troca de
+//! dados independente de runtime.
 use crate::openmtr::error::OpenMTRError;
 use async_trait::async_trait;
 
 #[cfg(feature = "native-http")]
+/// Transporte HTTP baseado em `reqwest`, disponível com `native-http`.
 pub mod reqwest;
 
 #[derive(Debug, Clone)]
+/// Requisição HTTP abstrata passada a um [`HttpTransport`].
 pub struct HttpRequest {
+    /// Método HTTP em maiúsculas (`GET`, `POST`, ...).
     pub method: String,
+    /// URL absoluta de destino.
     pub url: String,
+    /// Cabeçalhos como pares `(nome, valor)`.
     pub headers: Vec<(String, String)>,
+    /// Corpo serializado, ou `None` para requisições sem corpo.
     pub body: Option<Vec<u8>>,
 }
 
 impl HttpRequest {
+    /// Cria uma requisição `GET` sem cabeçalhos nem corpo.
     pub fn get(url: impl Into<String>) -> Self {
         Self {
             method: "GET".into(),
@@ -22,6 +38,7 @@ impl HttpRequest {
         }
     }
 
+    /// Cria uma requisição `POST` sem cabeçalhos nem corpo.
     pub fn post(url: impl Into<String>) -> Self {
         Self {
             method: "POST".into(),
@@ -31,11 +48,15 @@ impl HttpRequest {
         }
     }
 
+    /// Acrescenta um cabeçalho à requisição.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((key.into(), value.into()));
         self
     }
 
+    /// Serializa `body` como JSON no corpo da requisição.
+    ///
+    /// Falha com [`OpenMTRError::parse_error`] se a serialização falhar.
     pub fn json_body<T: serde::Serialize>(mut self, body: &T) -> Result<Self, OpenMTRError> {
         self.body =
             Some(serde_json::to_vec(body).map_err(|e| OpenMTRError::parse_error(e.to_string()))?);
@@ -43,37 +64,55 @@ impl HttpRequest {
     }
 }
 
+/// Resposta HTTP abstrata devolvida por um [`HttpTransport`].
 #[derive(Debug)]
 pub struct HttpResponse {
+    /// Código de status HTTP numérico.
     pub status: u16,
+    /// Corpo bruto da resposta.
     pub body: Vec<u8>,
+    /// Valor do cabeçalho `Content-Type`, quando informado.
     pub content_type: Option<String>,
+    /// Valor do cabeçalho `Content-Length` em bytes, quando informado.
     pub content_length: Option<u64>,
 }
 
 impl HttpResponse {
+    /// Desserializa o corpo como JSON.
+    ///
+    /// Falha com [`OpenMTRError::parse_error`] se o corpo não for JSON válido
+    /// para `T`, independentemente do status HTTP.
     pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, OpenMTRError> {
         serde_json::from_slice(&self.body).map_err(|e| OpenMTRError::parse_error(e.to_string()))
     }
 
+    /// Devolve o corpo como texto, substituindo bytes inválidos por U+FFFD.
     #[must_use]
     pub fn text(&self) -> String {
         String::from_utf8_lossy(&self.body).into_owned()
     }
 
+    /// Indica sucesso quando o status está entre 200 e 299.
     #[must_use]
     pub fn is_success(&self) -> bool {
         (200..300).contains(&self.status)
     }
 
+    /// Devolve uma cópia do corpo em bytes.
     #[must_use]
     pub fn bytes(&self) -> Vec<u8> {
         self.body.clone()
     }
 }
 
+/// Transporte HTTP assíncrono, ponto de extensão e teste do cliente.
+///
+/// Exige `Send + Sync` para uso concorrente. Implementações próprias permitem
+/// executar o mesmo fluxo em qualquer runtime (nativo via reqwest, WASM via
+/// fetch) e são injetadas nos builders por `build_with_transport`.
 #[async_trait]
 pub trait HttpTransport: Send + Sync {
+    /// Envia uma requisição e devolve a resposta, ou um erro de transporte.
     async fn send(&self, req: HttpRequest) -> Result<HttpResponse, OpenMTRError>;
 }
 

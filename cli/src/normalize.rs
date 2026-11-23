@@ -1,3 +1,10 @@
+//! Normalização de manifestos para saída estável (JSONL/CSV/golden).
+//!
+//! Datas viram `YYYY-MM-DD`, documentos de gerador/transportador/destinador
+//! são escritos como CPF ou CNPJ pontuado, status usa a descrição textual do
+//! `StatusMtr` (incluindo status livres) e quantidades são arredondadas a 4 casas
+//! decimais. A ordem dos campos de `DumpRow` e de [`CSV_HEADER`](crate::normalize::CSV_HEADER) é
+//! parte do contrato: mudá-la altera goldens e arquivos CSV.
 use open_mtr_core::openmtr::domain::{Mtr, Residuo};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -5,48 +12,83 @@ use std::collections::BTreeMap;
 /// Linha normalizada de dump. Campos fixos para CSV/golden estáveis.
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct DumpRow {
+    /// Conta de origem do manifesto, conforme `--account`.
     pub account: String,
+    /// Sistema de origem normalizado (`sinir`, `sigor`, `mtr_pe`, ...).
     pub system: String,
+    /// Número do MTR; usado como identidade quando presente.
     pub numero: String,
+    /// Código de barras do MTR; identidade alternativa quando `numero` está vazio.
     pub barcode: String,
+    /// Status textual do manifesto (`Ativo`, `Em Transporte`, `Recebido`, `Cancelado`, `Expirado` ou texto livre).
     pub status: String,
+    /// Tipo de manifesto conforme o sistema de origem.
     pub tipo_manifesto: Option<i32>,
+    /// UF do manifesto, quando informada.
     pub estado_uf: Option<String>,
+    /// Data de criação no formato `YYYY-MM-DD`.
     pub data_criacao: Option<String>,
+    /// Data de expedição no formato `YYYY-MM-DD`.
     pub data_expedicao: Option<String>,
+    /// Data de recebimento no formato `YYYY-MM-DD`.
     pub data_recebimento: Option<String>,
+    /// Indicador de armazenamento temporário.
     pub armazenamento_temporario: Option<bool>,
+    /// Indicador de alteração pendente.
     pub tem_alteracao_pendente: Option<bool>,
+    /// Hash do manifesto na origem, quando disponível.
     pub hash: Option<String>,
+    /// Observação do manifesto, sem normalização adicional.
     pub observacao: Option<String>,
+    /// Nome do motorista.
     pub motorista: Option<String>,
+    /// Placa do veículo.
     pub placa: Option<String>,
+    /// Número estadual do manifesto.
     pub numero_estadual: Option<String>,
+    /// Código estadual do manifesto.
     pub codigo_estadual: Option<i64>,
+    /// Documento do gerador (CPF ou CNPJ pontuado).
     pub gerador_documento: Option<String>,
+    /// Razão social do gerador.
     pub gerador_razao_social: Option<String>,
+    /// Unidade do gerador.
     pub gerador_unidade: Option<u32>,
+    /// Documento do transportador (CPF ou CNPJ pontuado).
     pub transportador_documento: Option<String>,
+    /// Razão social do transportador.
     pub transportador_razao_social: Option<String>,
+    /// Unidade do transportador.
     pub transportador_unidade: Option<u32>,
+    /// Documento do destinador (CPF ou CNPJ pontuado).
     pub destinador_documento: Option<String>,
+    /// Razão social do destinador.
     pub destinador_razao_social: Option<String>,
+    /// Unidade do destinador.
     pub destinador_unidade: Option<u32>,
+    /// JSON com os detalhes de cada resíduo; `[]` se não houver resíduos.
     pub residuos_json: String,
+    /// Nomes das classes dos resíduos, únicos e unidos por ` | `; classes sem mapeamento viram `CLASSE <código>`.
     #[serde(default)]
     pub classe_residuo: String,
+    /// Observações dos resíduos (descrição, descrição interna e observação), deduplicadas e unidas por ` | `.
     #[serde(default)]
     pub observacoes_residuos: String,
+    /// Soma das quantidades esperadas dos resíduos, arredondada a 4 casas.
     pub qtd_residuo_esperada: f64,
+    /// Soma das quantidades recebidas, arredondada a 4 casas; `None` se nenhum resíduo foi recebido.
     pub qtd_residuo_recebida: Option<f64>,
+    /// Prioridade de acesso na deduplicação: transportadora `0`, destinadora/receptora `1`, geradora `2`.
     pub access_priority: u8,
 }
 
 impl DumpRow {
+    /// Constrói uma linha sem mapa de classes (classes caem para `CLASSE <código>`).
     pub fn from_mtr(account: &str, system: &str, access_priority: u8, mtr: Mtr) -> Self {
         Self::from_mtr_with_classes(account, system, access_priority, mtr, &BTreeMap::new())
     }
 
+    /// Constrói uma linha resolvendo códigos de classe pelo mapa `classes` (código → nome).
     pub fn from_mtr_with_classes(
         account: &str,
         system: &str,
@@ -188,8 +230,10 @@ fn round4(v: f64) -> f64 {
     (v * 10_000.0).round() / 10_000.0
 }
 
+/// Cabeçalho fixo do CSV de manifestos; a ordem dos campos deve acompanhar [`csv_line`].
 pub const CSV_HEADER: &str = "OTR,MTR_NUMERO,DATA_EMISSAO,DATA_RECEBIMENTO,QNT_RECEBIDA,QNT_ESPERADA,STATUS,OBSERVACOES,OBSERVACOES_RESIDUOS,GERADOR_CNPJ,GERADOR_NOME,DESTINADOR_CNPJ,DESTINADOR_NOME,MOTORISTA,PLACA,CLASSE_RESIDUO,RESIDUO_JSON_DETALHADO,SISTEMA";
 
+/// Serializa `row` em uma linha CSV com 18 colunas, escapando vírgulas, aspas e quebras de linha.
 pub fn csv_line(row: &DumpRow) -> String {
     let emissao = row
         .data_criacao
@@ -199,18 +243,18 @@ pub fn csv_line(row: &DumpRow) -> String {
         "-".to_string(),
         csv_escape(&row.numero),
         emissao.map_or_default(csv_escape),
-        opt_str(&row.data_recebimento),
+        opt_str(row.data_recebimento.as_deref()),
         row.qtd_residuo_recebida.map_or_default(|v| format!("{v}")),
         format!("{}", row.qtd_residuo_esperada),
         csv_escape(&row.status),
-        opt_str(&row.observacao),
+        opt_str(row.observacao.as_deref()),
         csv_escape(&row.observacoes_residuos),
-        opt_str(&row.gerador_documento),
-        opt_str(&row.gerador_razao_social),
-        opt_str(&row.destinador_documento),
-        opt_str(&row.destinador_razao_social),
-        opt_str(&row.motorista),
-        opt_str(&row.placa),
+        opt_str(row.gerador_documento.as_deref()),
+        opt_str(row.gerador_razao_social.as_deref()),
+        opt_str(row.destinador_documento.as_deref()),
+        opt_str(row.destinador_razao_social.as_deref()),
+        opt_str(row.motorista.as_deref()),
+        opt_str(row.placa.as_deref()),
         csv_escape(&row.classe_residuo),
         csv_escape(&row.residuos_json),
         csv_escape(&row.system),
@@ -218,6 +262,7 @@ pub fn csv_line(row: &DumpRow) -> String {
     fields.join(",")
 }
 
+/// Escapa um campo CSV: quebras viram espaço e aspas são duplicadas dentro de `"..."`.
 pub fn escape_csv_field(s: &str) -> String {
     csv_escape(s)
 }
@@ -232,6 +277,6 @@ fn csv_escape(s: &str) -> String {
     }
 }
 
-fn opt_str(v: &Option<String>) -> String {
-    v.as_deref().map_or_default(csv_escape)
+fn opt_str(v: Option<&str>) -> String {
+    v.map_or_default(csv_escape)
 }

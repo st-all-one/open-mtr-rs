@@ -1,3 +1,5 @@
+//! Criação no MTR-PE via adapter ao vivo (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

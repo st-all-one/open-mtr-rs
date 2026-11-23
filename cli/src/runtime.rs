@@ -1,17 +1,23 @@
-use crate::account::{Account, filter_accounts, load_accounts};
+//! Estado compartilhado de uma execução da CLI: configuração, contas e cache de sessão.
+use crate::account::{Account, AccountScope, filter_accounts, load_accounts};
 use crate::config::{CliConfig, Defaults};
 use crate::error::CliError;
 use crate::login::{LOGIN_ID, Login};
 use crate::session::SessionCache;
 use std::path::Path;
 
+/// Estado resolvido de uma invocação, carregado de `--config` ou de `--login`.
 pub struct Runtime {
+    /// Configuração carregada; vazia de contas no modo `--login`.
     pub config: CliConfig,
+    /// Contas resolvidas e habilitadas para seleção.
     pub accounts: Vec<Account>,
+    /// Cache de access tokens reaproveitado entre operações.
     pub cache: SessionCache,
 }
 
 impl Runtime {
+    /// Carrega configuração e contas de `config_path` e cria o cache de sessão do ambiente.
     pub fn load(config_path: &Path) -> Result<Self, CliError> {
         let config = CliConfig::load(config_path)?;
         let accounts = load_accounts(&config)?;
@@ -55,17 +61,11 @@ impl Runtime {
     /// Resolve o escopo de leitura, aceitando `--login` como conta única.
     ///
     /// Flags de escopo são incompatíveis com `--login`: a sessão já é única.
-    pub fn select<'a>(
-        &'a self,
-        ids: &[String],
-        system: Option<&str>,
-        tags: &[String],
-        all: bool,
-    ) -> Result<Vec<&'a Account>, CliError> {
+    pub fn select<'a>(&'a self, scope: AccountScope<'_>) -> Result<Vec<&'a Account>, CliError> {
         if !self.is_login() {
-            return self.resolve(ids, system, tags, all);
+            return self.resolve(scope);
         }
-        if all || system.is_some() || !tags.is_empty() || !ids.is_empty() {
+        if !matches!(scope, AccountScope::All) {
             return Err(CliError::Usage(
                 "--login não combina com --account/--system/--tag/--all-accounts".into(),
             ));
@@ -90,14 +90,9 @@ impl Runtime {
         }
     }
 
-    pub fn resolve<'a>(
-        &'a self,
-        ids: &[String],
-        system: Option<&str>,
-        tags: &[String],
-        all: bool,
-    ) -> Result<Vec<&'a Account>, CliError> {
-        filter_accounts(&self.accounts, ids, system, tags, all)
+    /// Filtra as contas pelo escopo sem tratar o modo `--login` como conta única.
+    pub fn resolve<'a>(&'a self, scope: AccountScope<'_>) -> Result<Vec<&'a Account>, CliError> {
+        filter_accounts(&self.accounts, scope)
     }
 }
 
@@ -123,13 +118,12 @@ mod tests {
     }
 
     #[test]
-    fn login_runtime_rejects_scope_flags_but_accepts_single() {
+    fn login_runtime_stays_single_account_under_any_scope() {
+        // `AccountScope` torna ilegal combinar `--login` com filtros de escopo;
+        // a sessão de login permanece sempre uma única conta sintética.
         let rt = Runtime::from_login(login(r#"{"system":"sinir","token":"t"}"#)).expect("runtime");
-        assert!(rt.select(&["outra".into()], None, &[], false).is_err());
-        assert!(rt.select(&[], Some("sinir"), &[], false).is_err());
-        assert!(rt.select(&[], None, &["prod".into()], false).is_err());
-        assert!(rt.select(&[], None, &[], true).is_err());
-        assert_eq!(rt.select(&[], None, &[], false).expect("única").len(), 1);
+        assert!(rt.is_login());
+        assert_eq!(rt.accounts.len(), 1);
         assert_eq!(rt.single().expect("single").id, LOGIN_ID);
     }
 }

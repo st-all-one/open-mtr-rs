@@ -1,3 +1,5 @@
+//! Consulta SINIR do papel transportador ao vivo (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

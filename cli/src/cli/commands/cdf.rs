@@ -1,6 +1,8 @@
 use super::find_account;
 use super::io::{print_one_or_many, write_downloads};
+use crate::account::AccountScope;
 use crate::error::CliError;
+use crate::output::OutputFormat;
 use crate::params::{filtro_cdf_from_json, parse_items, parse_params};
 use crate::runtime::Runtime;
 use chrono::{DateTime, Utc};
@@ -12,7 +14,7 @@ pub(super) async fn run(
     rt: &Runtime,
     sub: CdfCmd,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     match sub {
         CdfCmd::Consultar {
@@ -35,7 +37,7 @@ pub(super) async fn run(
                 }
             };
             let ids: Vec<String> = account.into_iter().collect();
-            let sel = rt.select(&ids, None, &[], false)?;
+            let sel = rt.select(AccountScope::Ids(&ids))?;
             if sel.is_empty() {
                 return Err(CliError::Usage("escopo de conta obrigatório".into()));
             }
@@ -55,16 +57,16 @@ pub(super) async fn run(
                     "data": data,
                 }));
             }
-            print_one_or_many(json, results)
+            print_one_or_many(format, results)
         }
         CdfCmd::Gerar { account, params } => {
-            gerar(rt, account.as_deref(), &params, fixed_time, json).await
+            gerar(rt, account.as_deref(), &params, fixed_time, format).await
         }
         CdfCmd::Download {
             account,
             params,
             out,
-        } => download(rt, account.as_deref(), &params, fixed_time, &out, json).await,
+        } => download(rt, account.as_deref(), &params, fixed_time, &out, format).await,
     }
 }
 
@@ -73,7 +75,7 @@ async fn gerar(
     account_id: Option<&str>,
     params: &str,
     fixed_time: Option<DateTime<Utc>>,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
     let value = parse_params(Some(params))?;
@@ -85,7 +87,7 @@ async fn gerar(
         .gerar_cdfs(items)
         .await
         .map_err(|e| CliError::Network(e.to_string()))?;
-    super::io::print_value(json, &res)
+    super::io::print_value(format, &res)
 }
 
 async fn download(
@@ -94,7 +96,7 @@ async fn download(
     params: &str,
     fixed_time: Option<DateTime<Utc>>,
     out: &std::path::Path,
-    json: bool,
+    format: OutputFormat,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
     let value = parse_params(Some(params))?;
@@ -106,5 +108,5 @@ async fn download(
         .download_cdfs(items)
         .await
         .map_err(|e| CliError::Network(e.to_string()))?;
-    write_downloads(resp.dados, out, json)
+    write_downloads(resp.dados, out, format)
 }

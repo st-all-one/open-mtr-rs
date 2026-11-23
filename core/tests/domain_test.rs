@@ -1,3 +1,5 @@
+//! Testes do domínio (newtypes, datas, filtros e tabelas).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

@@ -1,3 +1,20 @@
+//! Testes do self update (tag, checksum e extração).
+
+#![allow(
+    clippy::as_conversions,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::pedantic,
+    clippy::print_stderr,
+    clippy::print_stdout,
+    clippy::unwrap_used,
+    clippy::wildcard_imports,
+    reason = "suíte de integração: atalhos de fixture e verificação de saída são legítimos"
+)]
+
 use open_mtr_cli::selfupdate::{asset_name, extract_tar_gz, parse_checksums, target};
 
 #[test]

@@ -53,35 +53,35 @@ scripts/              # utilitários de qualidade
   `clippy.toml`. Não adicione `#![allow]` sem `reason`.
 - `deny.toml` cobre advisories, licenças, wildcards e fontes. O padrão de licença é
   **MIT OR Apache-2.0**.
-- O orçamento atual de tamanho de arquivo é **transitório** (1500 linhas). O alvo da revitalização
-  é 300 linhas por arquivo de produção. Ao extrair um adapter, reduza o orçamento em
-  `scripts/check_file_length.sh`.
+- O orçamento de tamanho de arquivo é **300 linhas por arquivo de produção**, aplicado por
+  `scripts/check_file_length.sh` (core, cli, napi, uniffi, wasm). Não suba o teto: extraia um
+  módulo coeso.
 
 ## 4. Revitalização (Rust 1.100)
 
-Dívidas conhecidas, em ordem sugerida (as concluídas ficam registradas para não voltarem):
+Estado das dívidas conhecidas — todas fechadas; ficam registradas para não voltarem:
 
-1. **[aberta]** Dividir `core/src/openmtr/adapters/{sinir,mtr_pe,sigor}.rs` em módulos coesos
-   (alvo: 300 linhas). Teto transitório atual: 1500 (`scripts/check_file_length.sh`).
-2. **[feita em 1.100]** Remover `expect`/`unwrap` de produção. Restam apenas os de `#[cfg(test)]`
-   e um `expect` local justificado em `error.rs::make_urn` (URN de literais infalível). Não
-   reintroduza `unwrap`/`expect` fora de testes.
-3. **[aberta]** Subir `missing_docs` de `allow` para `warn` e documentar toda a API pública
-   (~514 itens pendentes).
-4. **[feita em 1.100]** `domain/tabela.rs` usa `BTreeMap` (ordem determinística) em vez de
-   `HashMap`.
-5. **[feita em 1.100]** `wasm/src/lib.rs` usa `RefCell` com `reason` explícita no `allow`, no
-   limite single-thread do wasm-bindgen.
-6. **[feita em 1.100]** `Dockerfile` alinhado aos paths atuais (`core/`, `cli/`, `napi/`,
-   `uniffi/`, `wasm/`; sem `deno_napi`) e o job `docker` do CI constrói a imagem e roda
-   `openmtr --version`.
-7. **[aberta]** Fazer `cli/` herdar `[workspace.lints]` (`[lints] workspace = true`) e corrigir
-   as ~94 lints expostas: `fn_params_excessive_bools`, `print_stdout`/`print_stderr`,
-   `unreachable_pub`, `struct_excessive_bools` (flags de CLI) e repetição de nome de enum.
-   Enquanto isso, `cli/` declara um `[lints]` vazio (intenção explícita de não herdar) para
-   silenciar `cargo::missing_lints_inheritance`. A herança é tudo-ou-nada: o `cli` também fica
-   fora das lints de Cargo (`unused_dependencies`, `redundant_homepage`); dependências não usadas
-   no CLI são cobertas apenas pelo `cargo machete` no CI.
+1. **[feita]** Adapters divididos em diretórios coesos: `adapters/{sinir,sigor,mtr_pe}/` (cada
+   arquivo ≤300 linhas). O trait `MtrAdapter` fica em `adapters/trait_def.rs`; cada adapter tem
+   um único `impl MtrAdapter` em `mod.rs` delegando para métodos inerentes `*_impl` nos
+   submódulos. **Não** se divide `impl Trait for Type` entre arquivos (E0119).
+2. **[feita]** Sem `expect`/`unwrap` em produção. Restam só os de `#[cfg(test)]` e um `expect`
+   justificado em `error/types.rs::make_urn` (URN de literais infalível).
+3. **[feita]** `missing_docs = "warn"` e toda a API pública (core + 4 bindings) documentada;
+   `make doc` roda `RUSTDOCFLAGS=-D warnings`. A única exceção é `#[allow(missing_docs)]`
+   justificado em `napi/src/lib.rs` (código gerado por `#[napi]`).
+4. **[feita]** `domain/tabela.rs` usa `BTreeMap` (ordem determinística).
+5. **[feita]** `wasm/src/lib.rs` usa `RefCell` com `reason` no `allow` (limite single-thread).
+6. **[feita]** `Dockerfile` nos paths atuais, com job `docker` no CI.
+7. **[feita]** `cli/` herda `[lints] workspace = true`; flags booleanas viraram
+   `enum AccountScope`/`LogInit`, e `print_stdout`/`print_stderr` são `#[allow]` com `reason`
+   nos pontos de saída. Para clap, o doc-comment do campo É o `--help`: ao mudá-lo, rode
+   `make cli-docs`.
+8. **[feita]** Todo arquivo de produção ≤300 linhas (cliente HTTP, domínio, erro, cliente,
+   `cli`) por extração em submódulos coesos.
+9. **[aberta]** `chrono` é unmaintained (RUSTSEC-2026-0543), sem correção; migrar para
+   `time`/`jiff` quando houver janela. Enquanto isso, o `ignore` está justificado no
+   `deny.toml` e registrado em `kd`.
 
 ## 5. Testes
 

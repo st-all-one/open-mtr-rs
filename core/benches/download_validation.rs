@@ -1,7 +1,10 @@
+//! Benchmarks da validação de downloads (content-type e magic bytes).
+
 #![allow(
     clippy::as_conversions,
     clippy::indexing_slicing,
-    reason = "benchmark replica a validação do cliente com dados sintéticos"
+    missing_docs,
+    reason = "benchmark replica a validação do cliente com dados sintéticos; as funções vêm da macro criterion"
 )]
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};

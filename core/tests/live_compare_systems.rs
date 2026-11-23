@@ -1,3 +1,5 @@
+//! Comparação ao vivo entre sistemas (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

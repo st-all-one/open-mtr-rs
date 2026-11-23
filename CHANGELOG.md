@@ -33,9 +33,22 @@ determinismo testado.
 
 ### Alterado
 
-- `AGENTS.md` §4: dívidas concluídas (unwrap/expect, `BTreeMap`, `RefCell`,
-  Dockerfile) marcadas como feitas; abertas (split dos adapters, `missing_docs`,
-  herança de lints do `cli`) seguem registradas.
+- **Teto de 300 linhas por arquivo de produção, aplicado no `make check`.** Divididos em
+  módulos coesos: `adapters/{sinir,sigor,mtr_pe}/`, `client/http/`, `domain/{newtypes,mtr}/`,
+  `error/`, `open_mtr_client/`, e na CLI `cli/{cli,account,session,batch,login,dump,selfupdate}/`.
+  `scripts/check_file_length.sh` passa a valer 300 e a cobrir `cli/`.
+- `missing_docs` sobe de `allow` para `warn`: toda a API pública (core + napi/uniffi/wasm) está
+  documentada e `make doc` roda `-D warnings`.
+- `cli/` passa a herdar `[workspace.lints]`. Flags booleanas viraram enums
+  (`AccountScope`, `LogInit`) e as saídas `print_stdout`/`print_stderr` estão isoladas com
+  `reason`.
+- `Cargo.toml` ganhou `.cargo/config.toml` com `[registry] global-min-publish-age = "3 days"`
+  (cooldown de publicação do Cargo 1.100); com `--locked` no CI/release não afeta builds.
+- `AGENTS.md` §4: todas as dívidas fechadas exceto a migração `chrono`→`time`/`jiff`.
+
+### Adicionado
+
+- Testes de determinismo do cliente (envelope `id` e `today()` via injeção).
 
 ## [0.2.0] - 2026-11-15
 

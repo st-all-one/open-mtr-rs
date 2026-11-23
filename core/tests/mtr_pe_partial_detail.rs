@@ -1,3 +1,5 @@
+//! Manifestos do MTR-PE sem CDF emitido (detalhe parcial).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

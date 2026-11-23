@@ -1,3 +1,5 @@
+//! Consulta do MTR-PE por período ao vivo (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

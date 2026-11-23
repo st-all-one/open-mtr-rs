@@ -1,3 +1,5 @@
+//! Autenticação clássica do MTR-PE ao vivo (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,

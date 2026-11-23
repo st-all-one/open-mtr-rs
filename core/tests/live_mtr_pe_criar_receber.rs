@@ -1,3 +1,5 @@
+//! Criação e recebimento no MTR-PE ao vivo (requer credenciais).
+
 #![allow(
     clippy::as_conversions,
     clippy::disallowed_macros,
