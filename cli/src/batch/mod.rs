@@ -9,7 +9,7 @@
 use crate::error::CliError;
 use crate::params::periodo_from_json;
 use crate::runtime::Runtime;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -55,7 +55,7 @@ pub struct BatchOptions {
     /// Simula todas as operações, sem chamadas à API.
     pub dry_run: bool,
     /// Relógio fixo para tornar determinísticas as operações com timestamp.
-    pub fixed_time: Option<DateTime<Utc>>,
+    pub fixed_time: Option<Timestamp>,
 }
 
 const KNOWN_OPS: &[&str] = &[

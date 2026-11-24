@@ -17,7 +17,6 @@ pub use quantidade::Quantidade;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
 
     #[test]
     fn test_cnpj_valido() {
@@ -101,12 +100,12 @@ mod tests {
     #[test]
     fn test_data_mtr_parse() {
         let data = DataMtr::parse("15-03-2025").unwrap();
-        assert_eq!(data.0, NaiveDate::from_ymd_opt(2025, 3, 15).unwrap());
+        assert_eq!(data.0, jiff::civil::date(2025, 3, 15));
     }
 
     #[test]
     fn test_data_mtr_display() {
-        let data = DataMtr(NaiveDate::from_ymd_opt(2025, 3, 15).unwrap());
+        let data = DataMtr(jiff::civil::date(2025, 3, 15));
         assert_eq!(data.to_string(), "15-03-2025");
     }
 
@@ -118,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_data_mtr_serialize() {
-        let data = DataMtr(NaiveDate::from_ymd_opt(2025, 3, 15).unwrap());
+        let data = DataMtr(jiff::civil::date(2025, 3, 15));
         let json = serde_json::to_string(&data).unwrap();
         assert_eq!(json, "\"15-03-2025\"");
     }

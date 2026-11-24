@@ -30,7 +30,7 @@
 
 use std::path::Path;
 
-use chrono::Utc;
+use jiff::{ToSpan, tz::TimeZone};
 use open_mtr_core::*;
 
 fn load_env() {
@@ -65,14 +65,16 @@ fn reportar_erros(erros: &[OpenMTRError]) {
 /// Tenta consultar MTRs com janelas de 30 dias para trás (até 180 dias).
 /// Usa o FiltroMtr com periodo e tenta diferentes tipoParceiro (Gerador, Transportador, Destinador).
 async fn descobrir_mtrs_por_periodo(client: &OpenMtrClient) -> Vec<String> {
-    let hoje = Utc::now().date_naive();
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(TimeZone::UTC)
+        .date();
 
     // Tenta com cada tipo de parceiro: Gerador (padrão), Transportador, Destinador
     use TipoParte as Tp;
     for tipo in [None::<Tp>, Some(Tp::Transportador), Some(Tp::Destinador)] {
         for dias in (30..=180).step_by(30) {
-            let inicio = hoje - chrono::Duration::days(dias);
-            let fim = hoje - chrono::Duration::days(dias - 29);
+            let inicio = hoje.checked_sub(dias.days()).expect("data inicio");
+            let fim = hoje.checked_sub((dias - 29).days()).expect("data fim");
 
             let parte = tipo.clone().map(|t| FiltroParte {
                 tipo: t,
@@ -202,18 +204,20 @@ async fn descobrir_barcodes_mtr_pe(token: &str) -> Vec<String> {
         .expect("reqwest Client");
 
     let base = System::MtrPe.default_base_url();
-    let hoje = Utc::now().date_naive();
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(TimeZone::UTC)
+        .date();
 
     // Tenta janelas de 30 dias nos últimos 180 dias
     for dias in (30..=180).step_by(30) {
-        let inicio = hoje - chrono::Duration::days(dias);
-        let fim = hoje - chrono::Duration::days(dias - 29);
+        let inicio = hoje.checked_sub(dias.days()).expect("data inicio");
+        let fim = hoje.checked_sub((dias - 29).days()).expect("data fim");
 
         let url = format!(
             "{}/retornaListaCodigoBarasManifesto/{}/{}",
             base,
-            inicio.format("%Y%m%d"),
-            fim.format("%Y%m%d")
+            jiff::fmt::strtime::format("%Y%m%d", inicio).unwrap_or_default(),
+            jiff::fmt::strtime::format("%Y%m%d", fim).unwrap_or_default()
         );
 
         let resp = match client

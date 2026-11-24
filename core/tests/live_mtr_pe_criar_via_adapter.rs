@@ -129,7 +129,11 @@ async fn test_pe_criar_via_adapter() {
         residuos,
         responsavel: "STALLONE TESTE".into(),
         observacoes: Some("MTR CRIADO VIA OpenMtrClient (adapter MTR-PE)".into()),
-        data_expedicao: Some(chrono::Utc::now().naive_utc()),
+        data_expedicao: Some(
+            jiff::Timestamp::now()
+                .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+                .datetime(),
+        ),
         placa_veiculo: Some("ABC-1A34".into()),
         motorista: Some("MOTORISTA TESTE".into()),
         armazenador_temporario: None,

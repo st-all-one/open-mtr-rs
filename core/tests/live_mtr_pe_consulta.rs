@@ -15,6 +15,7 @@
     reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
 )]
 
+use jiff::civil::Date;
 use std::sync::OnceLock;
 
 static ENV_LOADED: OnceLock<()> = OnceLock::new();
@@ -66,15 +67,11 @@ async fn get_token() -> String {
 }
 
 /// Obtém a lista de códigos de barras em um período específico (máx 30 dias)
-async fn listar_barcodes_range(
-    token: &str,
-    inicio: chrono::NaiveDate,
-    fim: chrono::NaiveDate,
-) -> Vec<String> {
+async fn listar_barcodes_range(token: &str, inicio: Date, fim: Date) -> Vec<String> {
     let url = format!(
         "{BASE}/retornaListaCodigoBarasManifesto/{}/{}",
-        inicio.format("%Y%m%d"),
-        fim.format("%Y%m%d")
+        jiff::fmt::strtime::format("%Y%m%d", inicio).unwrap_or_default(),
+        jiff::fmt::strtime::format("%Y%m%d", fim).unwrap_or_default()
     );
 
     let response = client()
@@ -116,9 +113,10 @@ async fn listar_barcodes_range(
 
 /// Obtém a lista de códigos de barras dos MTRs nos últimos N dias
 async fn listar_barcodes(token: &str, dias: i64) -> Vec<String> {
-    use chrono::Utc;
-    let hoje = Utc::now().date_naive();
-    let inicio = hoje - chrono::Duration::days(dias);
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
+    let inicio = hoje.checked_sub(jiff::ToSpan::days(dias)).expect("data");
     println!("   Período {inicio} a {hoje} ({dias} dias)");
     listar_barcodes_range(token, inicio, hoje).await
 }
@@ -156,12 +154,15 @@ async fn test_pe_consulta_completa() {
     let barcodes = if barcodes.is_empty() {
         // API tem máximo de 30 dias — tenta janelas de 30 dias nos últimos 6 meses
         let mut found: Vec<String> = Vec::new();
-        use chrono::Duration;
-        let hoje = chrono::Utc::now().date_naive();
+        let hoje = jiff::Timestamp::now()
+            .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+            .date();
 
         for meses in 0..6 {
-            let fim = hoje - Duration::days(meses as i64 * 30);
-            let inicio = fim - Duration::days(29);
+            let fim = hoje
+                .checked_sub(jiff::ToSpan::days(meses as i64 * 30))
+                .expect("data");
+            let inicio = fim.checked_sub(jiff::ToSpan::days(29)).expect("data");
             if found.is_empty() {
                 println!("   Tentando {inicio} a {fim}...");
                 let b2 = listar_barcodes_range(&token, inicio, fim).await;

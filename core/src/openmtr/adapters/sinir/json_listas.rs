@@ -1,5 +1,6 @@
 //! Conversões de JSON do SINIR: listas de domínio, CDFs e respostas genéricas.
 
+use jiff::{civil::Date, fmt::strtime};
 use serde_json::Value;
 
 use crate::openmtr::domain::{
@@ -93,11 +94,11 @@ pub(super) fn lista_residuo_ibama(v: &Value) -> ResiduoIbama {
 }
 
 /// Converte JSON de CDF emitido em tipo de domínio.
-pub(super) fn lista_cdf_emitido(v: &Value, hoje: chrono::NaiveDate) -> CdfEmitido {
+pub(super) fn lista_cdf_emitido(v: &Value, hoje: Date) -> CdfEmitido {
     let data_emissao = v
         .get("dataEmissao")
         .and_then(|s| s.as_str())
-        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok())
+        .and_then(|s| strtime::parse("%d/%m/%Y", s).ok()?.to_date().ok())
         .unwrap_or(hoje);
 
     CdfEmitido {

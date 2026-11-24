@@ -51,7 +51,8 @@ pub(crate) fn criar_mtr_para_json(criar: &CriarMtr) -> Value {
         m["manifTransportadorPlacaVeiculo"] = json!(placa);
     }
     if let Some(dt) = criar.data_expedicao {
-        m["manifTransportadorDataExpedicao"] = json!(dt.format("%Y%m%d").to_string());
+        m["manifTransportadorDataExpedicao"] =
+            json!(jiff::fmt::strtime::format("%Y%m%d", dt).unwrap_or_default());
     }
     if let Some(ref refcode) = criar.codigo_referencia
         && let Ok(num) = refcode.parse::<i64>()

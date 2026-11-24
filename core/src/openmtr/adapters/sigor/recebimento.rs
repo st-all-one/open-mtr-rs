@@ -55,9 +55,16 @@ impl SigorAdapter {
                 })
                 .collect();
 
+            let data_recebimento_ms = match receber
+                .data_recebimento
+                .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+            {
+                Ok(zdt) => zdt.timestamp().as_millisecond(),
+                Err(_) => 0,
+            };
             let body = json!([{
                 "manNumero": receber.numero,
-                "dataRecebimento": receber.data_recebimento.and_utc().timestamp_millis(),
+                "dataRecebimento": data_recebimento_ms,
                 "nomeMotorista": receber.motorista.as_deref().unwrap_or("Motorista"),
                 "placaVeiculo": receber.placa_veiculo.as_deref().unwrap_or("ABC1234"),
                 "nomeResponsavelRecebimento": receber.responsavel,

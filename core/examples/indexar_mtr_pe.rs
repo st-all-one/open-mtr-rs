@@ -30,7 +30,7 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use chrono::{NaiveDate, Utc};
+use jiff::{civil::Date, fmt::strtime};
 use open_mtr_core::*;
 use serde_json::{Map, Value, json};
 
@@ -75,9 +75,9 @@ fn mtr_para_json(m: &Mtr) -> Value {
         "numero": m.numero.parse::<i64>().ok(),
         "barcode": m.barcode,
         "status": status_str(&m.status),
-        "data_criacao": m.data_criacao.map(|d| d.format("%Y%m%d").to_string()),
-        "data_expedicao": m.data_expedicao.map(|d| d.format("%Y%m%d").to_string()),
-        "data_recebimento": m.data_recebimento.map(|d| d.format("%Y%m%d").to_string()),
+        "data_criacao": m.data_criacao.map(|d| strtime::format("%Y%m%d", d).unwrap_or_default()),
+        "data_expedicao": m.data_expedicao.map(|d| strtime::format("%Y%m%d", d).unwrap_or_default()),
+        "data_recebimento": m.data_recebimento.map(|d| strtime::format("%Y%m%d", d).unwrap_or_default()),
         "observacao": m.observacao,
         "motorista": m.motorista,
         "placa": m.placa,
@@ -103,20 +103,24 @@ fn mtr_para_json(m: &Mtr) -> Value {
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let mut inicio = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
-    let mut fim = Utc::now().date_naive();
+    let mut inicio = jiff::civil::date(2026, 1, 1);
+    let mut fim = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
     let mut saida = "indice_mtr_pe.json".to_string();
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--inicio" if i + 1 < args.len() => {
-                inicio = NaiveDate::parse_from_str(&args[i + 1], "%Y-%m-%d")
+                inicio = args[i + 1]
+                    .parse::<Date>()
                     .unwrap_or_else(|_| panic!("Data inválida em --inicio: {}", args[i + 1]));
                 i += 1;
             }
             "--fim" if i + 1 < args.len() => {
-                fim = NaiveDate::parse_from_str(&args[i + 1], "%Y-%m-%d")
+                fim = args[i + 1]
+                    .parse::<Date>()
                     .unwrap_or_else(|_| panic!("Data inválida em --fim: {}", args[i + 1]));
                 i += 1;
             }
@@ -234,9 +238,9 @@ async fn main() {
             "empresa_cnpj": cnpj,
             "empresa_cnpj_raiz": raiz_empresa,
             "unidade": unity,
-            "periodo_inicio": inicio.format("%Y-%m-%d").to_string(),
-            "periodo_fim": fim.format("%Y-%m-%d").to_string(),
-            "gerado_em": Utc::now().to_rfc3339(),
+            "periodo_inicio": strtime::format("%Y-%m-%d", inicio).unwrap_or_default(),
+            "periodo_fim": strtime::format("%Y-%m-%d", fim).unwrap_or_default(),
+            "gerado_em": jiff::Timestamp::now().to_string(),
         },
         "resumo": {
             "total_mtrs": mtrs.len(),

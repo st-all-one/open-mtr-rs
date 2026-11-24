@@ -126,9 +126,9 @@ async fn dump_deduplicates_same_mtr_across_accounts() {
         format: "both".to_string(),
         concurrency: 2,
         fixed_time: Some(
-            chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
-                .expect("data")
-                .with_timezone(&chrono::Utc),
+            "2026-06-01T00:00:00Z"
+                .parse::<jiff::Timestamp>()
+                .expect("data"),
         ),
     };
     run(&cfg, &SessionCache::memory(), &refs, &opts)
@@ -206,9 +206,9 @@ async fn dump_is_byte_deterministic_with_fixed_time() {
         .map(|r| Account::from_raw(r).expect("conta"))
         .collect();
     let refs: Vec<&Account> = accounts.iter().collect();
-    let fixed = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00Z")
-        .expect("data")
-        .with_timezone(&chrono::Utc);
+    let fixed = "2026-06-01T00:00:00Z"
+        .parse::<jiff::Timestamp>()
+        .expect("data");
 
     let mut outputs = Vec::new();
     for _ in 0..2 {
@@ -241,11 +241,14 @@ async fn dump_is_byte_deterministic_with_fixed_time() {
 }
 
 trait DateHelper {
-    fn parse_date_helper(&self) -> chrono::NaiveDate;
+    fn parse_date_helper(&self) -> jiff::civil::Date;
 }
 
 impl DateHelper for &str {
-    fn parse_date_helper(&self) -> chrono::NaiveDate {
-        chrono::NaiveDate::parse_from_str(self, "%Y-%m-%d").expect("data")
+    fn parse_date_helper(&self) -> jiff::civil::Date {
+        jiff::fmt::strtime::parse("%Y-%m-%d", self)
+            .ok()
+            .and_then(|p| p.to_date().ok())
+            .expect("data")
     }
 }

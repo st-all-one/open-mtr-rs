@@ -1,5 +1,6 @@
 //! Conversões de JSON do SINIR: filtros de consulta e payloads de escrita.
 
+use jiff::{ToSpan, civil::Date, tz::TimeZone};
 use serde_json::{Value, json};
 
 use crate::openmtr::domain::{
@@ -18,14 +19,14 @@ pub(super) fn escrita_tipo_parte_i32(tipo: &TipoParte) -> i32 {
 }
 
 /// Constrói o corpo JSON da consulta por período e tipo de parceiro.
-pub(super) fn escrita_filtro_json(filtro: &FiltroMtr, hoje: chrono::NaiveDate) -> Value {
+pub(super) fn escrita_filtro_json(filtro: &FiltroMtr, hoje: Date) -> Value {
     let (data_inicial, data_final) = if let Some(periodo) = &filtro.periodo {
         (periodo.inicio.to_string(), periodo.fim.to_string())
     } else {
-        let mes_atras = hoje - chrono::Duration::days(30);
+        let mes_atras = hoje.checked_sub(30.days()).unwrap_or(hoje);
         (
-            mes_atras.format("%d-%m-%Y").to_string(),
-            hoje.format("%d-%m-%Y").to_string(),
+            jiff::fmt::strtime::format("%d-%m-%Y", mes_atras).unwrap_or_default(),
+            jiff::fmt::strtime::format("%d-%m-%Y", hoje).unwrap_or_default(),
         )
     };
 
@@ -97,7 +98,7 @@ pub(super) fn escrita_criar_mtr_json(criar: &CriarMtr) -> Value {
         })),
         "nomeMotorista": criar.motorista,
         "placaVeiculo": criar.placa_veiculo,
-        "dataExpedicao": criar.data_expedicao.map(|dt| dt.and_utc().timestamp_millis()),
+        "dataExpedicao": criar.data_expedicao.and_then(millis_de_datetime),
         "observacoes": criar.observacoes,
         "tipoManifesto": criar.tipo_manifesto.as_ref().map(crate::openmtr::domain::tipo::TipoManifesto::codigo),
         "simCodigo": Option::<i32>::None,
@@ -156,7 +157,7 @@ pub(super) fn escrita_receber_mtr_json(receber: &ReceberMtr) -> Value {
 
     json!({
         "manNumero": receber.numero,
-        "dataRecebimento": receber.data_recebimento.and_utc().timestamp_millis(),
+        "dataRecebimento": millis_de_datetime(receber.data_recebimento).unwrap_or_default(),
         "nomeResponsavel": receber.responsavel,
         "observacoes": receber.observacoes,
         "listaResiduosRecebidos": residuos,
@@ -174,4 +175,11 @@ pub(super) fn escrita_json_mtr_recebido(v: &Value) -> MtrRecebido {
         recebido: v.get("recebido").and_then(Value::as_bool).unwrap_or(false),
         mensagem: v.get("mensagem").and_then(|s| s.as_str()).map(String::from),
     }
+}
+
+/// Converte uma data-hora civil interpretada como UTC em epoch ms.
+fn millis_de_datetime(dt: jiff::civil::DateTime) -> Option<i64> {
+    dt.to_zoned_datetime(TimeZone::UTC)
+        .ok()
+        .map(|zdt| zdt.timestamp().as_millisecond())
 }

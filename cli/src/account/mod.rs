@@ -123,7 +123,7 @@ impl Account {
     pub async fn build_client(
         &self,
         cfg: &CliConfig,
-        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        fixed_time: Option<jiff::Timestamp>,
         cache: &SessionCache,
     ) -> Result<OpenMtrClient, CliError> {
         let token = self.resolve_token();
@@ -156,7 +156,7 @@ impl Account {
     async fn build_refresh_client(
         &self,
         cfg: &CliConfig,
-        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        fixed_time: Option<jiff::Timestamp>,
         token: Option<String>,
         cache: &SessionCache,
     ) -> Result<OpenMtrClient, CliError> {
@@ -197,7 +197,7 @@ impl Account {
     fn configured_builder(
         &self,
         cfg: &CliConfig,
-        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        fixed_time: Option<jiff::Timestamp>,
     ) -> open_mtr_core::openmtr::open_mtr_client::OpenMtrClientBuilder {
         let timeout = cfg.defaults.timeout_secs;
         let maxrps = self.max_concurrency.unwrap_or(cfg.defaults.max_concurrency);
@@ -223,7 +223,7 @@ impl Account {
     async fn client_with_access(
         &self,
         cfg: &CliConfig,
-        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        fixed_time: Option<jiff::Timestamp>,
         token: &str,
     ) -> Result<OpenMtrClient, CliError> {
         self.configured_builder(cfg, fixed_time)
@@ -236,7 +236,7 @@ impl Account {
     async fn client_with_refresh(
         &self,
         cfg: &CliConfig,
-        fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+        fixed_time: Option<jiff::Timestamp>,
         token: &str,
     ) -> Result<OpenMtrClient, CliError> {
         self.configured_builder(cfg, fixed_time)

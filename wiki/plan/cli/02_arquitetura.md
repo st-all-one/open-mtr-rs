@@ -262,7 +262,7 @@ erro apropriado.
 | `tracing`/`tracing-subscriber` | logs stderr, níveis | borda observável |
 | `tokio` | runtime assíncrono | core já depende |
 | `csv` | CSV de dump | escaping correto em vez de manual |
-| `chrono` | datas/janelas | já no core |
+| `jiff` | datas/janelas | já no core |
 | `sha2` | hash de PDF/artefatos | manifesto verificável; licença compatível |
 
 Dev: `wiremock` (já no core), `assert_cmd`, `predicates`, `tempfile`. Nenhuma dependência de HTTP

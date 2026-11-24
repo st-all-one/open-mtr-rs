@@ -15,7 +15,7 @@
     reason = "suíte de integração: atalhos de fixture e verificação de saída são legítimos"
 )]
 
-use chrono::NaiveDate;
+use jiff::civil::date;
 use open_mtr_cli::normalize::{CSV_HEADER, DumpRow, csv_line};
 use open_mtr_core::openmtr::domain::{CpfCnpj, Mtr, Parte, Residuo, StatusMtr};
 use std::collections::BTreeMap;
@@ -65,14 +65,14 @@ fn mtr() -> Mtr {
             residuo(1, "Desc A", 1.5, 1.25),
             residuo(43, "Desc B", 2.0, 0.75),
         ],
-        data_criacao: NaiveDate::from_ymd_opt(2026, 10, 1),
-        data_recebimento: NaiveDate::from_ymd_opt(2026, 10, 2),
+        data_criacao: Some(date(2026, 10, 1)),
+        data_recebimento: Some(date(2026, 10, 2)),
         observacao: Some("obs do MTR".to_string()),
         motorista: Some("Fulano".to_string()),
         placa: Some("ABC1D23".to_string()),
         tipo_manifesto: None,
         estado_uf: Some("PE".to_string()),
-        data_expedicao: NaiveDate::from_ymd_opt(2026, 9, 30),
+        data_expedicao: Some(date(2026, 9, 30)),
         armazenamento_temporario: None,
         hash: None,
         tem_alteracao_pendente: None,

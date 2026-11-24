@@ -69,8 +69,9 @@ impl SinirAdapter {
         for (indice, req) in reqs.into_iter().enumerate() {
             let body = json!({
                 "listaManifestos": req.manifestos,
-                "dataEmissao": req.data_emissao.and_hms_opt(0, 0, 0)
-                    .map_or(0, |dt| dt.and_utc().timestamp_millis()),
+                "dataEmissao": req.data_emissao.at(0, 0, 0, 0)
+                    .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+                    .map_or(0, |zdt| zdt.timestamp().as_millisecond()),
                 "nomeResponsavel": req.responsavel,
                 "observacoes": req.observacoes,
             });

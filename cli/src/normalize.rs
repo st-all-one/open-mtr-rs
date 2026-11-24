@@ -123,11 +123,9 @@ impl DumpRow {
             status: mtr.status.to_string(),
             tipo_manifesto: mtr.tipo_manifesto,
             estado_uf: mtr.estado_uf.clone(),
-            data_criacao: mtr.data_criacao.map(|d| d.format("%Y-%m-%d").to_string()),
-            data_expedicao: mtr.data_expedicao.map(|d| d.format("%Y-%m-%d").to_string()),
-            data_recebimento: mtr
-                .data_recebimento
-                .map(|d| d.format("%Y-%m-%d").to_string()),
+            data_criacao: mtr.data_criacao.map(format_iso_date),
+            data_expedicao: mtr.data_expedicao.map(format_iso_date),
+            data_recebimento: mtr.data_recebimento.map(format_iso_date),
             armazenamento_temporario: mtr.armazenamento_temporario,
             tem_alteracao_pendente: mtr.tem_alteracao_pendente,
             hash: mtr.hash.clone(),
@@ -228,6 +226,10 @@ fn observacoes_residuos(residuos: &[Residuo]) -> String {
 
 fn round4(v: f64) -> f64 {
     (v * 10_000.0).round() / 10_000.0
+}
+
+fn format_iso_date(d: jiff::civil::Date) -> String {
+    jiff::fmt::strtime::format("%Y-%m-%d", d).unwrap_or_default()
 }
 
 /// Cabeçalho fixo do CSV de manifestos; a ordem dos campos deve acompanhar [`csv_line`].

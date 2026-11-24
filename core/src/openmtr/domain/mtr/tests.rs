@@ -6,14 +6,8 @@ fn test_periodo_deserializa_intervalo() {
     let p: Periodo =
         serde_json::from_str(r#"{"dataInicial":"01-06-2026","dataFinal":"10-08-2026"}"#)
             .expect("intervalo válido");
-    assert_eq!(
-        p.inicio.0,
-        NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")
-    );
-    assert_eq!(
-        p.fim.0,
-        NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida")
-    );
+    assert_eq!(p.inicio.0, jiff::civil::date(2026, 6, 1));
+    assert_eq!(p.fim.0, jiff::civil::date(2026, 8, 10));
 }
 
 #[test]
@@ -23,14 +17,8 @@ fn test_periodo_deserializa_iso8601_new_date() {
         r#"{"dataInicial":"2026-06-01T00:00:00.000Z","dataFinal":"2026-08-10T12:30:00.000Z"}"#,
     )
     .expect("ISO 8601 válido");
-    assert_eq!(
-        p.inicio.0,
-        NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")
-    );
-    assert_eq!(
-        p.fim.0,
-        NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida")
-    );
+    assert_eq!(p.inicio.0, jiff::civil::date(2026, 6, 1));
+    assert_eq!(p.fim.0, jiff::civil::date(2026, 8, 10));
 }
 
 #[test]
@@ -38,30 +26,24 @@ fn test_periodo_deserializa_iso8601_data_simples() {
     let p: Periodo =
         serde_json::from_str(r#"{"dataInicial":"2026-06-01","dataFinal":"2026-08-10"}"#)
             .expect("ISO data simples");
-    assert_eq!(
-        p.inicio.0,
-        NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")
-    );
-    assert_eq!(
-        p.fim.0,
-        NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida")
-    );
+    assert_eq!(p.inicio.0, jiff::civil::date(2026, 6, 1));
+    assert_eq!(p.fim.0, jiff::civil::date(2026, 8, 10));
 }
 
 #[test]
 fn test_periodo_deserializa_timestamp_ms() {
-    let inicio = NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida");
-    let fim = NaiveDate::from_ymd_opt(2026, 8, 10).expect("data válida");
+    let inicio = jiff::civil::date(2026, 6, 1);
+    let fim = jiff::civil::date(2026, 8, 10);
     let ts_inicio = inicio
-        .and_hms_opt(0, 0, 0)
-        .expect("hora válida")
-        .and_utc()
-        .timestamp_millis();
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .expect("inicio utc")
+        .timestamp()
+        .as_millisecond();
     let ts_fim = fim
-        .and_hms_opt(0, 0, 0)
-        .expect("hora válida")
-        .and_utc()
-        .timestamp_millis();
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .expect("fim utc")
+        .timestamp()
+        .as_millisecond();
     let p: Periodo = serde_json::from_str(&format!(
         r#"{{"dataInicial":{ts_inicio},"dataFinal":{ts_fim}}}"#
     ))
@@ -79,21 +61,23 @@ fn test_periodo_deserializa_data_invalida() {
 
 #[test]
 fn test_periodo_deserializa_dias() {
-    let hoje = crate::openmtr::time_util::utc_now().date_naive();
+    let hoje = crate::openmtr::time_util::utc_now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
     let p: Periodo = serde_json::from_str(r#"{"dias":7}"#).expect("atalho dias");
     assert_eq!(p.fim.0, hoje);
-    assert_eq!(p.inicio.0, hoje - chrono::Duration::days(7));
+    assert_eq!(
+        p.inicio.0,
+        hoje.checked_sub(jiff::ToSpan::days(7)).expect("data")
+    );
 }
 
 #[test]
 fn test_ultimos_dias_em_e_deterministico() {
-    let hoje = NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida");
+    let hoje = jiff::civil::date(2026, 6, 1);
     let p = Periodo::ultimos_dias_em(hoje, 7);
     assert_eq!(p.fim.0, hoje);
-    assert_eq!(
-        p.inicio.0,
-        NaiveDate::from_ymd_opt(2026, 5, 25).expect("data válida")
-    );
+    assert_eq!(p.inicio.0, jiff::civil::date(2026, 5, 25));
 }
 
 #[test]
@@ -106,8 +90,8 @@ fn test_periodo_deserializa_intervalo_invertido() {
 #[test]
 fn test_periodo_serializa_intervalo() {
     let p = Periodo::new(
-        DataMtr(NaiveDate::from_ymd_opt(2026, 6, 1).expect("data válida")),
-        DataMtr(NaiveDate::from_ymd_opt(2026, 6, 30).expect("data válida")),
+        DataMtr(jiff::civil::date(2026, 6, 1)),
+        DataMtr(jiff::civil::date(2026, 6, 30)),
     )
     .expect("período válido");
     let json = serde_json::to_string(&p).expect("serialize");

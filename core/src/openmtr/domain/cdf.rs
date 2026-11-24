@@ -1,11 +1,11 @@
 //! Emissão, consulta e download de CDF (Certificado de Destinação Final) nos
 //! sistemas SINIR, SIGOR e MTR-PE.
 //!
-//! As datas são civis (`NaiveDate`), sem hora nem fuso; os campos serde derivados
+//! As datas são civis (`Date`), sem hora nem fuso; os campos serde derivados
 //! serializam como `yyyy-mm-dd` ISO 8601, e os adaptadores as convertem para epoch
 //! ms no SINIR ou `AAAAMMDD` no SIGOR e MTR-PE.
 //! O download devolve os bytes do arquivo, não uma URL.
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 
 use super::mtr::Periodo;
@@ -20,7 +20,7 @@ pub struct GerarCdf {
     pub manifestos: Vec<String>,
     /// Data civil de emissão, serializada como `yyyy-mm-dd` ISO 8601; convertida
     /// para epoch ms no SINIR e para `AAAAMMDD` no SIGOR e MTR-PE.
-    pub data_emissao: NaiveDate,
+    pub data_emissao: Date,
     /// Nome de quem emite o certificado (`nomeResponsavel` no SINIR/SIGOR,
     /// `responsavel` no MTR-PE).
     pub responsavel: String,
@@ -41,7 +41,7 @@ pub struct Cdf {
     /// Número do certificado exibido no sistema; no MTR-PE replica `codigo`.
     pub numero: String,
     /// Data civil de emissão informada pelo sistema, serializada como `yyyy-mm-dd`.
-    pub data_emissao: NaiveDate,
+    pub data_emissao: Date,
     /// Situação do certificado conforme o sistema; vazia quando a API não informa.
     pub status: String,
 }
@@ -57,7 +57,7 @@ pub struct CdfEmitido {
     /// Número do certificado no sistema; vazio quando a API não fornece um separado.
     pub numero: String,
     /// Data civil de emissão do certificado, serializada como `yyyy-mm-dd`.
-    pub data_emissao: NaiveDate,
+    pub data_emissao: Date,
     /// Situação do certificado devolvida pelo sistema; vazia quando não informada.
     pub status: String,
 }

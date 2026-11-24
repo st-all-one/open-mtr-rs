@@ -1,6 +1,6 @@
 //! Conversões de JSON do MTR-PE para tipos de domínio: manifestos e resíduos.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use serde_json::Value;
 
 use crate::openmtr::domain::{Cnpj, CpfCnpj, Mtr, Parte, Residuo, StatusMtr};
@@ -36,12 +36,12 @@ pub(crate) fn cnpj_para_parte(cnpj: &Value, unidade: Option<u32>) -> Parte {
 }
 
 /// Interpreta uma data `YYYYMMDD` do MTR-PE.
-pub(crate) fn parse_data_yyyymmdd(v: &Value) -> Option<NaiveDate> {
+pub(crate) fn parse_data_yyyymmdd(v: &Value) -> Option<Date> {
     let s = v.as_str().unwrap_or("");
     if s.is_empty() {
         return None;
     }
-    NaiveDate::parse_from_str(s, "%Y%m%d").ok()
+    jiff::fmt::strtime::parse("%Y%m%d", s).ok()?.to_date().ok()
 }
 
 /// Converte um item de manifesto do JSON para [`Residuo`].

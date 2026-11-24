@@ -1,6 +1,6 @@
 # Referência da CLI `openmtr`
 
-> Gerado automaticamente por `scripts/gen-cli-docs.sh` a partir de `openmtr 0.2.0`.
+> Gerado automaticamente por `scripts/gen-cli-docs.sh` a partir de `openmtr 0.3.0`.
 > Não edite à mão: rode `make cli-docs` e versione o resultado.
 
 ## `openmtr --help`

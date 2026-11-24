@@ -6,7 +6,7 @@
 //! civil `yyyymmdd`. As quantidades recebidas usam a unidade da tabela
 //! `UnidadeMedida` indicada em cada item.
 
-use chrono::NaiveDateTime;
+use jiff::civil::DateTime;
 use serde::{Deserialize, Serialize};
 
 use super::residuo::ResiduoRecebido;
@@ -21,7 +21,7 @@ pub struct ReceberMtr {
     pub numero: String,
     /// Data e hora civil do recebimento, sem fuso; serializada por serde como
     /// ISO 8601 e convertida a epoch ms no SINIR/SIGOR ou `yyyymmdd` no MTR-PE.
-    pub data_recebimento: NaiveDateTime,
+    pub data_recebimento: DateTime,
     /// Nome de quem recebe os resíduos pelo destinador (`nomeResponsavel` no
     /// SINIR, `nomeResponsavelRecebimento` no SIGOR, `recebimentoMtrResponsavel`
     /// no MTR-PE).

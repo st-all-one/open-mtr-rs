@@ -98,8 +98,8 @@ impl MtrPeAdapter {
                     "manifestoCodigo": receber.numero,
                     "recebimentoMtrResponsavel": receber.responsavel,
                     "recebimentoMtrCargo": "Responsavel",
-                    "recebimentoMtrData": receber.data_recebimento.format("%Y%m%d").to_string(),
-                    "transporteMtrData": receber.data_recebimento.format("%Y%m%d").to_string(),
+                    "recebimentoMtrData": jiff::fmt::strtime::format("%Y%m%d", receber.data_recebimento).unwrap_or_default(),
+                    "transporteMtrData": jiff::fmt::strtime::format("%Y%m%d", receber.data_recebimento).unwrap_or_default(),
                     "itemManifestoRecebimentoJSONs": body,
                 }]
             });

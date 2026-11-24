@@ -1,6 +1,7 @@
 //! Downloads de MTR/CDF e emissão/consulta de CDFs no MTR-PE.
 
 use futures::stream::{self, StreamExt};
+use jiff::ToSpan;
 use serde_json::{Value, json};
 use tracing::instrument;
 
@@ -63,8 +64,8 @@ impl MtrPeAdapter {
 
         for (indice, req) in reqs.into_iter().enumerate() {
             let body = json!({
-                "dataInicial": req.data_emissao.format("%Y%m%d").to_string(),
-                "dataFinal": req.data_emissao.format("%Y%m%d").to_string(),
+                "dataInicial": jiff::fmt::strtime::format("%Y%m%d", req.data_emissao).unwrap_or_default(),
+                "dataFinal": jiff::fmt::strtime::format("%Y%m%d", req.data_emissao).unwrap_or_default(),
                 "responsavel": req.responsavel,
                 "txtObservacoes": req.observacoes,
                 "listaGerador": [],
@@ -132,15 +133,17 @@ impl MtrPeAdapter {
     ) -> Result<LoteResult<Cdf>, OpenMTRError> {
         let (data_ini, data_fim) = if let Some(p) = &filtro.periodo {
             (
-                format!("{}", p.inicio.0.format("%d/%m/%Y")),
-                format!("{}", p.fim.0.format("%d/%m/%Y")),
+                jiff::fmt::strtime::format("%d/%m/%Y", p.inicio.0).unwrap_or_default(),
+                jiff::fmt::strtime::format("%d/%m/%Y", p.fim.0).unwrap_or_default(),
             )
         } else {
             let hoje = ctx.today();
-            let mes_atras = hoje - chrono::Duration::days(30);
+            let mes_atras = hoje
+                .checked_sub(ToSpan::days(30))
+                .map_err(|e| OpenMTRError::validation(e.to_string()))?;
             (
-                mes_atras.format("%d/%m/%Y").to_string(),
-                hoje.format("%d/%m/%Y").to_string(),
+                jiff::fmt::strtime::format("%d/%m/%Y", mes_atras).unwrap_or_default(),
+                jiff::fmt::strtime::format("%d/%m/%Y", hoje).unwrap_or_default(),
             )
         };
 

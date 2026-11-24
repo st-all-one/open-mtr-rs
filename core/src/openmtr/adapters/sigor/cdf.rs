@@ -19,9 +19,11 @@ impl SigorAdapter {
         let mut itens = Vec::with_capacity(reqs.len());
 
         for (indice, req) in reqs.into_iter().enumerate() {
+            let data_str =
+                jiff::fmt::strtime::format("%Y%m%d", req.data_emissao).unwrap_or_default();
             let body = json!({
-                "cerDataInicial": req.data_emissao.format("%Y%m%d").to_string(),
-                "cerDataFinal": req.data_emissao.format("%Y%m%d").to_string(),
+                "cerDataInicial": data_str,
+                "cerDataFinal": data_str,
                 "parceiroDestinador": "",
                 "cnpjDestinador": "",
                 "tipoCertificadoDestinacao": 1,

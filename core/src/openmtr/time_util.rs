@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use jiff::{Timestamp, civil::Date};
 use uuid::Uuid;
 
 /// Fonte de tempo injetável para testes determinísticos.
@@ -9,17 +9,17 @@ use uuid::Uuid;
 /// manifestos e filtros); injetar um [`FixedClock`] torna esses valores
 /// reproduzíveis em golden tests.
 pub trait Clock: Send + Sync {
-    /// Instante atual em UTC.
-    fn now(&self) -> DateTime<Utc>;
+    /// Instante atual (UTC, com resolução de nanossegundos).
+    fn now(&self) -> Timestamp;
 
-    /// Data civil (sem fuso) derivada de [`Clock::now`]; usada como `today()` do contexto.
-    fn today(&self) -> NaiveDate {
-        self.now().date_naive()
+    /// Data civil (calendário de UTC) derivada de [`Clock::now`]; é o `today()` do contexto.
+    fn today(&self) -> Date {
+        self.now().to_zoned_datetime(jiff::tz::TimeZone::UTC).date()
     }
 
     /// Segundos desde o epoch Unix (a partir de `now()`), nunca negativo.
     fn now_unix_secs(&self) -> u64 {
-        self.now().timestamp().max(0).cast_unsigned()
+        self.now().as_second().max(0).cast_unsigned()
     }
 }
 
@@ -34,7 +34,7 @@ pub trait IdGenerator: Send + Sync {
 pub struct SystemClock;
 
 impl Clock for SystemClock {
-    fn now(&self) -> DateTime<Utc> {
+    fn now(&self) -> Timestamp {
         utc_now()
     }
 }
@@ -52,19 +52,19 @@ impl IdGenerator for UuidV7Generator {
 /// Relógio fixo, útil em testes e fixtures.
 #[derive(Debug, Clone, Copy)]
 pub struct FixedClock {
-    now: DateTime<Utc>,
+    now: Timestamp,
 }
 
 impl FixedClock {
     /// Cria um relógio fixo no instante UTC informado.
     #[must_use]
-    pub fn new(now: DateTime<Utc>) -> Self {
+    pub fn new(now: Timestamp) -> Self {
         Self { now }
     }
 }
 
 impl Clock for FixedClock {
-    fn now(&self) -> DateTime<Utc> {
+    fn now(&self) -> Timestamp {
         self.now
     }
 }
@@ -103,30 +103,29 @@ pub fn shared_id_generator(generator: impl IdGenerator + 'static) -> Arc<dyn IdG
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn utc_now() -> DateTime<Utc> {
+pub(crate) fn utc_now() -> Timestamp {
     let ms = js_sys::Date::now() as i64;
-    DateTime::from_timestamp_millis(ms).unwrap_or_default()
+    Timestamp::from_millisecond(ms).unwrap_or_default()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn utc_now() -> DateTime<Utc> {
-    Utc::now()
+pub(crate) fn utc_now() -> Timestamp {
+    // `Timestamp::now` lê o relógio do sistema; sem features de tz ele não abre a tzdb.
+    Timestamp::now()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use jiff::civil::date;
 
     #[test]
     fn fixed_clock_is_deterministic() {
-        let now = Utc
-            .with_ymd_and_hms(2026, 6, 1, 12, 0, 0)
-            .single()
-            .expect("data válida");
+        let now = Timestamp::from_second(1_780_000_000).expect("instante válido");
         let clock = FixedClock::new(now);
         assert_eq!(clock.now(), now);
-        assert_eq!(clock.today(), NaiveDate::from_ymd_opt(2026, 6, 1).unwrap());
+        assert_eq!(clock.today(), date(2026, 5, 28));
+        assert_eq!(clock.now_unix_secs(), 1_780_000_000);
     }
 
     #[test]

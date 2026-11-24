@@ -44,6 +44,7 @@ fn test_timeout() -> u64 {
         .unwrap_or(120)
 }
 
+use jiff::civil::date;
 use open_mtr_core::*;
 
 /// Cria cliente apontando para SINIR real.
@@ -64,8 +65,10 @@ async fn create_live_client() -> Option<OpenMtrClient> {
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 fn ultimos_30_dias() -> FiltroMtr {
-    let hoje = chrono::Utc::now().date_naive();
-    let inicio = hoje - chrono::Duration::days(30);
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
+    let inicio = hoje.checked_sub(jiff::ToSpan::days(30)).expect("data");
     FiltroMtr {
         periodo: Some(Periodo::new(DataMtr(inicio), DataMtr(hoje)).unwrap()),
         parte: Some(FiltroParte {
@@ -78,8 +81,10 @@ fn ultimos_30_dias() -> FiltroMtr {
 }
 
 fn ultimos_90_dias() -> FiltroMtr {
-    let hoje = chrono::Utc::now().date_naive();
-    let inicio = hoje - chrono::Duration::days(90);
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
+    let inicio = hoje.checked_sub(jiff::ToSpan::days(90)).expect("data");
     FiltroMtr {
         periodo: Some(Periodo::new(DataMtr(inicio), DataMtr(hoje)).unwrap()),
         ..Default::default()
@@ -140,13 +145,7 @@ async fn test_live_consultar_por_periodo() {
 
     // Período específico: jan/2025 até fev/2025
     let filtro = FiltroMtr {
-        periodo: Some(
-            Periodo::new(
-                DataMtr(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
-                DataMtr(chrono::NaiveDate::from_ymd_opt(2025, 3, 1).unwrap()),
-            )
-            .unwrap(),
-        ),
+        periodo: Some(Periodo::new(DataMtr(date(2025, 1, 1)), DataMtr(date(2025, 3, 1))).unwrap()),
         parte: Some(FiltroParte {
             tipo: TipoParte::Transportador,
             documento: None,
@@ -534,11 +533,13 @@ async fn test_live_consultar_mtr_261032125684() {
 
     println!("   Access token obtido");
 
-    let hoje = chrono::Utc::now().date_naive();
-    let inicio = hoje - chrono::Duration::days(30);
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
+    let inicio = hoje.checked_sub(jiff::ToSpan::days(30)).expect("data");
     let lista_body = serde_json::json!({
-        "dataInicial": inicio.format("%d-%m-%Y").to_string(),
-        "dataFinal": hoje.format("%d-%m-%Y").to_string(),
+        "dataInicial": jiff::fmt::strtime::format("%d-%m-%Y", inicio).unwrap_or_default(),
+        "dataFinal": jiff::fmt::strtime::format("%d-%m-%Y", hoje).unwrap_or_default(),
         "tipoParceiro": 5,
         "pagina": 0,
         "tamanhoPagina": 100

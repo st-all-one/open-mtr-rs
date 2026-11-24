@@ -1,7 +1,7 @@
 use crate::account::Account;
 use crate::error::CliError;
 use crate::normalize::DumpRow;
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use open_mtr_core::openmtr::domain::newtypes::DataMtr;
 use open_mtr_core::openmtr::domain::{FiltroMtr, FiltroParte, Periodo, TipoParte};
 use open_mtr_core::openmtr::open_mtr_client::OpenMtrClient;
@@ -25,8 +25,8 @@ pub(super) async fn fetch_classes(client: &OpenMtrClient) -> BTreeMap<u32, Strin
 pub(super) async fn fetch_window(
     client: &OpenMtrClient,
     account: &Account,
-    start: NaiveDate,
-    end: NaiveDate,
+    start: Date,
+    end: Date,
     classes: &BTreeMap<u32, String>,
 ) -> Result<(Vec<DumpRow>, Vec<String>), CliError> {
     // O endpoint `listaManifesto` filtra por `tipoParceiro`; sem os quatro
@@ -57,8 +57,8 @@ pub(super) async fn fetch_window(
 async fn fetch_role(
     client: &OpenMtrClient,
     account: &Account,
-    start: NaiveDate,
-    end: NaiveDate,
+    start: Date,
+    end: Date,
     papel: Option<TipoParte>,
     classes: &BTreeMap<u32, String>,
 ) -> Result<(Vec<DumpRow>, Vec<String>), CliError> {

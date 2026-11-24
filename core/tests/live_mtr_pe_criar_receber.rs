@@ -15,6 +15,7 @@
     reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
 )]
 
+use jiff::Timestamp;
 use std::sync::OnceLock;
 
 static ENV_LOADED: OnceLock<()> = OnceLock::new();
@@ -92,12 +93,12 @@ async fn test_pe_criar_e_receber_mtr() {
             "codUnidadeTransportador": 917,
             "cnpDestinador": cnpj,
             "codUnidadeDestinador": unity,
-            "seuCodigoReferencia": format!("TEST-OPENMTR-{}", chrono::Utc::now().format("%Y%m%d%H%M%S")),
+            "seuCodigoReferencia": format!("TEST-OPENMTR-{}", jiff::fmt::strtime::format("%Y%m%d%H%M%S", Timestamp::now()).unwrap_or_default()),
             "manifGeradorNomeResponsavel": "STALLONE TESTE",
             "manifGeradorCargoResponsavel": "ANALISTA",
             "manifTransportadorNomeMotorista": "MOTORISTA TESTE",
             "manifTransportadorPlacaVeiculo": "ABC-1A34",
-            "manifTransportadorDataExpedicao": chrono::Utc::now().format("%Y%m%d").to_string(),
+            "manifTransportadorDataExpedicao": jiff::fmt::strtime::format("%Y%m%d", Timestamp::now()).unwrap_or_default(),
             "manifObservacao": "MTR CRIADO VIA TESTE AUTOMATIZADO OPENMTR - RESIDUO 170201 (MADEIRA)",
             "itemManifestoJSONs": [{
                 "quantidade": 1.0,
@@ -163,8 +164,8 @@ async fn test_pe_criar_e_receber_mtr() {
                                 "manifestoCodigo": cod.to_string(),
                                 "recebimentoMtrResponsavel": "STALLONE TESTE",
                                 "recebimentoMtrCargo": "ANALISTA",
-                                "recebimentoMtrData": chrono::Utc::now().format("%Y%m%d").to_string(),
-                                "transporteMtrData": chrono::Utc::now().format("%Y%m%d").to_string(),
+                                "recebimentoMtrData": jiff::fmt::strtime::format("%Y%m%d", Timestamp::now()).unwrap_or_default(),
+                                "transporteMtrData": jiff::fmt::strtime::format("%Y%m%d", Timestamp::now()).unwrap_or_default(),
                                 "recebimentoMtrObs": "RECEBIMENTO VIA TESTE OPENMTR",
                                 "nomeMotorista": "MOTORISTA TESTE",
                                 "placaVeiculo": "ABC-1A34",

@@ -17,7 +17,7 @@
 
 use std::sync::OnceLock;
 
-use chrono::{NaiveDate, Utc};
+use jiff::civil::date;
 use open_mtr_core::*;
 
 static ENV_LOADED: OnceLock<()> = OnceLock::new();
@@ -68,9 +68,12 @@ async fn test_mtr_pe_consultar_por_periodo_generico() {
         .await
         .expect("client mtr-pe");
 
-    let hoje = Utc::now().date_naive();
-    let inicio = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
-    let fim = NaiveDate::from_ymd_opt(2026, 6, 30).unwrap();
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
+    // Janela fixa de junho/2026 — preservada da versão original.
+    let inicio = date(2026, 6, 1);
+    let fim = date(2026, 6, 30);
     assert!(inicio <= hoje);
 
     let filtro = FiltroMtr {

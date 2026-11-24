@@ -15,6 +15,7 @@
     reason = "suíte/fixture legada: atalhos de teste não fazem parte da API de produção"
 )]
 
+use jiff::civil::Date;
 use std::sync::OnceLock;
 
 static ENV_LOADED: OnceLock<()> = OnceLock::new();
@@ -124,17 +125,21 @@ async fn consultar_mtrpe_raw() -> Vec<serde_json::Value> {
         None => return Vec::new(),
     };
     let client = client_mtrpe();
-    use chrono::Duration;
-    let hoje = chrono::Utc::now().date_naive();
+    let hoje = jiff::Timestamp::now()
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+        .date();
 
     // Tenta janelas de 30 dias até encontrar MTRs
     for meses in 0..6 {
-        let fim = hoje - Duration::days(meses as i64 * 30);
-        let inicio = fim - Duration::days(29);
+        let fim = hoje
+            .checked_sub(jiff::ToSpan::days(i64::from(meses) * 30))
+            .expect("data");
+        let inicio = fim.checked_sub(jiff::ToSpan::days(29)).expect("data");
+        let format = |d: Date| jiff::fmt::strtime::format("%Y%m%d", d).unwrap_or_default();
         let url = format!(
             "https://mtr.cprh.pe.gov.br/api/retornaListaCodigoBarasManifesto/{}/{}",
-            inicio.format("%Y%m%d"),
-            fim.format("%Y%m%d")
+            format(inicio),
+            format(fim)
         );
         let resp: serde_json::Value = client
             .post(&url)
@@ -209,12 +214,14 @@ fn raw_para_mtr_domain(v: &serde_json::Value) -> open_mtr_core::Mtr {
         }
     };
 
-    let parse_data = |val: &serde_json::Value| -> Option<chrono::NaiveDate> {
+    let parse_data = |val: &serde_json::Value| -> Option<Date> {
         let s = val.as_str().unwrap_or("");
         if s.is_empty() {
             None
         } else {
-            chrono::NaiveDate::parse_from_str(s, "%Y%m%d").ok()
+            jiff::fmt::strtime::parse("%Y%m%d", s)
+                .ok()
+                .and_then(|p| p.to_date().ok())
         }
     };
 

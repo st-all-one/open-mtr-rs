@@ -57,7 +57,11 @@ pub(crate) fn criar_mtr_para_json(criar: &CriarMtr) -> Value {
         m["seuCodigo"] = json!(c);
     }
     if let Some(dt) = criar.data_expedicao {
-        m["dataExpedicao"] = json!(dt.and_utc().timestamp_millis());
+        let ms = match dt.to_zoned_datetime(jiff::tz::TimeZone::UTC) {
+            Ok(zdt) => zdt.timestamp().as_millisecond(),
+            Err(_) => 0,
+        };
+        m["dataExpedicao"] = json!(ms);
     }
     if let Some(ref mot) = criar.motorista {
         m["nomeMotorista"] = json!(mot);

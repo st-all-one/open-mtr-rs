@@ -5,7 +5,7 @@ use crate::error::CliError;
 use crate::output::OutputFormat;
 use crate::params::{filtro_mtr_from_json, parse_items, parse_params, string_array};
 use crate::runtime::Runtime;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use open_mtr_core::openmtr::domain::{
     AceitarAlteracao, CancelarMtr, CriarMtr, ModificarMtr, ReceberMtr,
 };
@@ -15,7 +15,7 @@ use crate::cli::MtrCmd;
 pub(super) async fn run(
     rt: &Runtime,
     sub: MtrCmd,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     match sub {
@@ -116,7 +116,7 @@ async fn consultar(
     alvo: Option<String>,
     scope: AccountScope<'_>,
     params: Option<String>,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     let value = match (alvo, params) {
@@ -190,7 +190,7 @@ async fn write(
     rt: &Runtime,
     account_id: Option<&str>,
     params: &str,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     kind: WriteKind,
     format: OutputFormat,
 ) -> Result<(), CliError> {
@@ -231,7 +231,7 @@ async fn download(
     numero: Option<String>,
     account_id: Option<&str>,
     params: Option<String>,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     out: &std::path::Path,
     format: OutputFormat,
 ) -> Result<(), CliError> {

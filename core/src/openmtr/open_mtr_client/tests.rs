@@ -45,7 +45,7 @@ impl HttpTransport for FakeTransport {
 
 fn fixed_clock() -> Arc<FixedClock> {
     Arc::new(FixedClock::new(
-        chrono::DateTime::from_timestamp(1_780_000_000, 0).expect("timestamp fixo"),
+        jiff::Timestamp::from_second(1_780_000_000).expect("timestamp fixo"),
     ))
 }
 

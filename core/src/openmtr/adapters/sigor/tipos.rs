@@ -72,19 +72,22 @@ pub(crate) fn json_para_parte_sigor(v: &Value) -> Parte {
 }
 
 /// Interpreta um timestamp em milissegundos como data.
-pub(crate) fn parse_timestamp_ms(v: &Value) -> Option<chrono::NaiveDate> {
+pub(crate) fn parse_timestamp_ms(v: &Value) -> Option<jiff::civil::Date> {
     v.as_i64()
-        .and_then(chrono::DateTime::from_timestamp_millis)
-        .map(|dt| dt.date_naive())
+        .and_then(|ms| jiff::Timestamp::from_millisecond(ms).ok())
+        .map(|ts| ts.to_zoned_datetime(jiff::tz::TimeZone::UTC).date())
 }
 
 /// Interpreta uma data no formato brasileiro `dd/mm/aaaa`.
-pub(crate) fn parse_data_br(v: &Value) -> Option<chrono::NaiveDate> {
+pub(crate) fn parse_data_br(v: &Value) -> Option<jiff::civil::Date> {
     let s = v.as_str().unwrap_or("");
     if s.is_empty() {
         return None;
     }
-    chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok()
+    jiff::fmt::strtime::parse("%d/%m/%Y", s)
+        .ok()?
+        .to_date()
+        .ok()
 }
 
 // ─── Parse helpers for list tables ───

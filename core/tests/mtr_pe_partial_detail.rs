@@ -15,7 +15,7 @@
     reason = "suíte de fixture: atalhos de teste não fazem parte da API de produção"
 )]
 
-use chrono::NaiveDate;
+use jiff::civil::date;
 use open_mtr_core::*;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
@@ -85,8 +85,8 @@ async fn cliente(server: &MockServer) -> OpenMtrClient {
 }
 
 fn filtro_outubro() -> FiltroMtr {
-    let inicio = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
-    let fim = NaiveDate::from_ymd_opt(2026, 10, 2).unwrap();
+    let inicio = date(2026, 10, 1);
+    let fim = date(2026, 10, 2);
     FiltroMtr {
         periodo: Some(Periodo::new(DataMtr::new(inicio), DataMtr::new(fim)).unwrap()),
         ..Default::default()

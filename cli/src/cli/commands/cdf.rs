@@ -5,7 +5,7 @@ use crate::error::CliError;
 use crate::output::OutputFormat;
 use crate::params::{filtro_cdf_from_json, parse_items, parse_params};
 use crate::runtime::Runtime;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use open_mtr_core::openmtr::domain::{DownloadCdf, GerarCdf};
 
 use crate::cli::CdfCmd;
@@ -13,7 +13,7 @@ use crate::cli::CdfCmd;
 pub(super) async fn run(
     rt: &Runtime,
     sub: CdfCmd,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     match sub {
@@ -74,7 +74,7 @@ async fn gerar(
     rt: &Runtime,
     account_id: Option<&str>,
     params: &str,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     let account = find_account(rt, account_id)?;
@@ -94,7 +94,7 @@ async fn download(
     rt: &Runtime,
     account_id: Option<&str>,
     params: &str,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     out: &std::path::Path,
     format: OutputFormat,
 ) -> Result<(), CliError> {

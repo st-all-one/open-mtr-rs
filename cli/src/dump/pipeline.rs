@@ -8,7 +8,7 @@ use crate::config::CliConfig;
 use crate::error::CliError;
 use crate::normalize::DumpRow;
 use crate::session::SessionCache;
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use serde_json::json;
 
 #[allow(
@@ -21,7 +21,7 @@ pub(super) async fn fetch_accounts(
     cache: &SessionCache,
     accounts: &[&Account],
     opts: &DumpOptions,
-    windows: &[(NaiveDate, NaiveDate)],
+    windows: &[(Date, Date)],
     state_path: &std::path::Path,
     state: &mut State,
     rows: &mut Vec<DumpRow>,

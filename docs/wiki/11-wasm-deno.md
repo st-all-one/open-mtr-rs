@@ -190,9 +190,8 @@ openMTR substitui todas as chamadas de tempo com equivalentes JS:
 |-------------|-------------------|---------|
 | `SystemTime::now()` | `js_sys::Date::now()` | `client/http.rs → now_unix_secs()` |
 | `Instant::now()` | `web_time::Instant` | `client/http.rs`, `client/token.rs` |
-| `Utc::now()` | `time_util::utc_now()` | `time_util.rs` |
+| `jiff::Timestamp::now()` | `time_util::utc_now()` via `js_sys::Date::now()` | `time_util.rs` |
 | `Uuid::now_v7()` | uuid `js` feature | `Cargo.toml` |
-| `chrono::Utc::now()` | `wasmbind` feature + `utc_now()` | `Cargo.toml`, `time_util.rs` |
 
 ## Dependências WASM (core)
 
@@ -200,7 +199,7 @@ openMTR substitui todas as chamadas de tempo com equivalentes JS:
 # Compiladas apenas para wasm32
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-time = "1"                                    # Instant::now()
-chrono = { version = "0.4", features = ["serde", "wasmbind", "std"] }
+jiff = { version = "1", default-features = false, features = ["std", "serde"] }
 uuid = { version = "1", features = ["std", "v7", "serde", "js"] }
 js-sys = "0.3"                                    # Date::now()
 wasm-bindgen-futures = "0.4"                      # JsFuture, spawn_local

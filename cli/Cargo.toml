@@ -26,7 +26,7 @@ anyhow = "1"
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-chrono = { workspace = true }
+jiff.workspace = true
 reqwest = { workspace = true }
 sha2 = "0.10"
 hex = "0.4"

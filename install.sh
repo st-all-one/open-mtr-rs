@@ -9,7 +9,7 @@
 # Uso:
 #   curl --proto '=https' --tlsv1.2 -fsSL \
 #     https://raw.githubusercontent.com/st-all-one/open-mtr-rs/main/install.sh | bash
-#   curl ... | OPENMTR_VERSION=v0.2.0 bash
+#   curl ... | OPENMTR_VERSION=v0.3.0 bash
 #   curl ... | OPENMTR_INSTALL_DIR="$HOME/bin" bash
 #   ./install.sh --from-source
 #   ./install.sh --uninstall

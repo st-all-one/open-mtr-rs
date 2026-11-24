@@ -166,13 +166,13 @@ impl MtrCtx {
 
     /// Instante atual segundo o relógio injetado.
     #[must_use]
-    pub fn now(&self) -> chrono::DateTime<chrono::Utc> {
+    pub fn now(&self) -> jiff::Timestamp {
         self.clock.now()
     }
 
     /// Data civil (sem fuso) segundo o relógio injetado.
     #[must_use]
-    pub fn today(&self) -> chrono::NaiveDate {
+    pub fn today(&self) -> jiff::civil::Date {
         self.clock.today()
     }
 

@@ -1,5 +1,6 @@
 //! Conversões de JSON do SINIR para MTRs (listagem e detalhe).
 
+use jiff::{Timestamp, civil::Date, fmt::strtime, tz::TimeZone};
 use serde_json::Value;
 
 use crate::openmtr::domain::{Mtr, Residuo};
@@ -11,14 +12,12 @@ pub(super) fn json_mtr_detalhe(v: &Value) -> Mtr {
     let data_criacao = v
         .get("manData")
         .and_then(Value::as_i64)
-        .and_then(chrono::DateTime::from_timestamp_millis)
-        .map(|dt| dt.date_naive());
+        .and_then(data_de_millis);
 
     let data_expedicao = v
         .get("manDataExpedicao")
         .and_then(Value::as_i64)
-        .and_then(chrono::DateTime::from_timestamp_millis)
-        .map(|dt| dt.date_naive());
+        .and_then(data_de_millis);
 
     let status_str = v
         .get("situacaoManifesto")
@@ -58,7 +57,7 @@ pub(super) fn json_mtr_detalhe(v: &Value) -> Mtr {
                 if s.is_empty() {
                     None
                 } else {
-                    chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y").ok()
+                    strtime::parse("%d/%m/%Y", s).ok()?.to_date().ok()
                 }
             }),
         observacao: v
@@ -110,14 +109,12 @@ pub(super) fn json_mtr(v: &Value) -> Mtr {
     let data_criacao = v
         .get("manData")
         .and_then(Value::as_i64)
-        .and_then(chrono::DateTime::from_timestamp_millis)
-        .map(|dt| dt.date_naive());
+        .and_then(data_de_millis);
 
     let data_expedicao = v
         .get("manDataExpedicao")
         .and_then(Value::as_i64)
-        .and_then(chrono::DateTime::from_timestamp_millis)
-        .map(|dt| dt.date_naive());
+        .and_then(data_de_millis);
 
     let status_str = v
         .get("manStatus")
@@ -191,4 +188,11 @@ pub(super) fn json_mtr(v: &Value) -> Mtr {
             .filter(|s| !s.is_empty()),
         codigo_estadual: v.get("manCodigoEstadual").and_then(Value::as_i64),
     }
+}
+
+/// Converte epoch ms em data civil UTC (o contrato do SINIR não anexa fuso).
+fn data_de_millis(ms: i64) -> Option<Date> {
+    Timestamp::from_millisecond(ms)
+        .ok()
+        .map(|ts| ts.to_zoned_datetime(TimeZone::UTC).date())
 }

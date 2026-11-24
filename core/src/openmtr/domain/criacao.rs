@@ -3,10 +3,10 @@
 //!
 //! As quantidades dos itens seguem a unidade da tabela `UnidadeMedida` indicada
 //! por `unidade`; os códigos de resíduo vêm do catálogo do IBAMA. Datas civis
-//! são `NaiveDate`/`NaiveDateTime` com serde derivado (`yyyy-mm-dd` e ISO 8601);
+//! são `Date`/`DateTime` com serde derivado (`yyyy-mm-dd` e ISO 8601);
 //! os adaptadores as convertem para epoch ms, `AAAAMMDD` ou `yyyymmdd` conforme
 //! o sistema.
-use chrono::NaiveDateTime;
+use jiff::civil::DateTime;
 use serde::{Deserialize, Serialize};
 
 use super::parte::Parte;
@@ -38,7 +38,7 @@ pub struct CriarMtr {
     /// Data e hora da expedição, sem fuso; o SINIR e o SIGOR enviam epoch ms ao
     /// sistema, e o MTR-PE envia apenas a data civil `yyyymmdd`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_expedicao: Option<NaiveDateTime>,
+    pub data_expedicao: Option<DateTime>,
     /// Placa do veículo; a normalização e validação ficam a cargo de cada sistema.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placa_veiculo: Option<String>,

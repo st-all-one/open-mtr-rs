@@ -3,7 +3,7 @@ use crate::batch::{self, BatchOptions};
 use crate::dump::{self, DumpOptions};
 use crate::error::CliError;
 use crate::runtime::Runtime;
-use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+use jiff::Timestamp;
 
 use super::{AccountCmd, BatchArgs, CdfCmd, ConfigCmd, DumpArgs, MtrCmd, RefCmd};
 use crate::output::OutputFormat;
@@ -13,18 +13,21 @@ mod io;
 mod mtr;
 mod ref_commands;
 
-pub(super) fn parse_fixed_time(raw: Option<&str>) -> Result<Option<DateTime<Utc>>, CliError> {
+pub(super) fn parse_fixed_time(raw: Option<&str>) -> Result<Option<Timestamp>, CliError> {
     let Some(raw) = raw else {
         return Ok(None);
     };
-    if let Ok(dt) = DateTime::parse_from_rfc3339(raw) {
-        return Ok(Some(dt.with_timezone(&Utc)));
+    if let Ok(ts) = raw.parse::<Timestamp>() {
+        return Ok(Some(ts));
     }
-    if let Ok(d) = NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
-        let dt = d
-            .and_hms_opt(0, 0, 0)
-            .ok_or_else(|| CliError::Usage("data inválida".into()))?;
-        return Ok(Some(Utc.from_utc_datetime(&dt)));
+    if let Ok(parsed) = jiff::fmt::strtime::parse("%Y-%m-%d", raw)
+        && let Ok(date) = parsed.to_date()
+        && let Ok(ts) = date
+            .at(0, 0, 0, 0)
+            .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+            .map(|z| z.timestamp())
+    {
+        return Ok(Some(ts));
     }
     Err(CliError::Usage(format!(
         "--fixed-time inválido: {raw} (use RFC 3339 ou YYYY-MM-DD)"
@@ -102,7 +105,7 @@ pub(super) fn run_config(
 pub(super) async fn run_mtr(
     rt: &Runtime,
     sub: MtrCmd,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     mtr::run(rt, sub, fixed_time, format).await
@@ -111,7 +114,7 @@ pub(super) async fn run_mtr(
 pub(super) async fn run_cdf(
     rt: &Runtime,
     sub: CdfCmd,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     cdf::run(rt, sub, fixed_time, format).await
@@ -120,7 +123,7 @@ pub(super) async fn run_cdf(
 pub(super) async fn run_ref(
     rt: &Runtime,
     sub: RefCmd,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     ref_commands::run(rt, sub, fixed_time, format).await
@@ -129,7 +132,7 @@ pub(super) async fn run_ref(
 pub(super) async fn run_dump(
     rt: &Runtime,
     args: DumpArgs,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
 ) -> Result<(), CliError> {
     let scope = if args.all_accounts {
         AccountScope::All
@@ -163,7 +166,7 @@ pub(super) async fn run_dump(
 pub(super) async fn run_batch(
     rt: &Runtime,
     args: BatchArgs,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
 ) -> Result<(), CliError> {
     let opts = BatchOptions {
         file: args.file,

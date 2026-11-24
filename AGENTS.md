@@ -79,9 +79,10 @@ Estado das dívidas conhecidas — todas fechadas; ficam registradas para não v
    `make cli-docs`.
 8. **[feita]** Todo arquivo de produção ≤300 linhas (cliente HTTP, domínio, erro, cliente,
    `cli`) por extração em submódulos coesos.
-9. **[aberta]** `chrono` é unmaintained (RUSTSEC-2026-0543), sem correção; migrar para
-   `time`/`jiff` quando houver janela. Enquanto isso, o `ignore` está justificado no
-   `deny.toml` e registrado em `kd`.
+9. **[feita em 0.3.0]** `chrono` (unmaintained, RUSTSEC-2026-0543) substituído por
+   `jiff` com `default-features = false`. O contrato de bytes é travado por
+   `core/tests/date_bytes.rs` e `core/tests/mtr_pe_request_bytes.rs`; todo parse/formatação
+   fora de ISO usa `jiff::fmt::strtime` (o `civil::Date` do jiff só lê ISO nativamente).
 
 ## 5. Testes
 

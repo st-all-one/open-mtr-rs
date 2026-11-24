@@ -4,7 +4,7 @@
 //! convertem a situação de cada sistema em [`StatusMtr`] e as datas recebidas como epoch ms ou
 //! em formato local em datas civis. Consultas usam [`FiltroMtr`] e [`Periodo`], e cada manifesto
 //! trafega como item de `dados` em [`crate::openmtr::resposta::Resposta`].
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -52,12 +52,12 @@ pub struct Mtr {
     ///
     /// A origem pode fornecer epoch ms (SINIR/SIGOR) ou data local `YYYYMMDD` (MTR-PE).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_criacao: Option<NaiveDate>,
+    pub data_criacao: Option<Date>,
     /// Data civil do recebimento pelo destinador, serializada como ISO 8601 (`YYYY-MM-DD`).
     ///
     /// Ausente enquanto o manifesto ainda não foi recebido.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_recebimento: Option<NaiveDate>,
+    pub data_recebimento: Option<Date>,
 
     // --- Campos adicionais (GAP 3) ---
     /// Observação livre do manifesto informada pela origem.
@@ -78,7 +78,7 @@ pub struct Mtr {
     pub estado_uf: Option<String>,
     /// Data civil de expedição do manifesto, serializada como ISO 8601 (`YYYY-MM-DD`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_expedicao: Option<NaiveDate>,
+    pub data_expedicao: Option<Date>,
     /// Indica se o manifesto possui armazenamento temporário; `None` se a origem não informa.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub armazenamento_temporario: Option<bool>,

@@ -608,7 +608,7 @@ serde = "1"           # Serialização JSON
 serde_json = "1"      # Parsing JSON
 reqwest = "0.12"      # HTTP client
 tokio = "1"           # Async runtime
-chrono = "0.4"        # Datas
+jiff = "1"            # Datas (calendário/instantes)
 uuid = { version = "1", features = ["v7"] }    # Correlation IDs
 url = "2"             # URLs
 tracing = "0.1"       # Logs estruturados

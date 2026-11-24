@@ -4,14 +4,14 @@ use crate::cli::{RefCmd, RefTable};
 use crate::error::CliError;
 use crate::output::OutputFormat;
 use crate::runtime::Runtime;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use open_mtr_core::openmtr::error::OpenMTRError;
 use open_mtr_core::openmtr::open_mtr_client::OpenMtrClient;
 
 pub(super) async fn run(
     rt: &Runtime,
     sub: RefCmd,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
     format: OutputFormat,
 ) -> Result<(), CliError> {
     match sub {
@@ -44,7 +44,7 @@ pub(super) async fn run(
 async fn client_for(
     rt: &Runtime,
     account: Option<String>,
-    fixed_time: Option<DateTime<Utc>>,
+    fixed_time: Option<Timestamp>,
 ) -> Result<OpenMtrClient, CliError> {
     let ids: Vec<String> = account.into_iter().collect();
     let sel = rt.select(AccountScope::Ids(&ids))?;

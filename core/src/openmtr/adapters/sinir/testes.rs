@@ -78,10 +78,7 @@ mod tests {
             tamanho: Some(50),
             ..FiltroMtr::default()
         };
-        let body = escrita_filtro_json(
-            &filtro,
-            chrono::NaiveDate::from_ymd_opt(2026, 6, 1).expect("data de teste"),
-        );
+        let body = escrita_filtro_json(&filtro, jiff::civil::date(2026, 6, 1));
         assert!(body.get("pagina").is_none(), "pagina não deve ir no body");
         assert!(
             body.get("tamanhoPagina").is_none(),

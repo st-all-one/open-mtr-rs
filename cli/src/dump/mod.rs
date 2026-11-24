@@ -13,7 +13,7 @@ use crate::config::CliConfig;
 use crate::error::CliError;
 use crate::normalize::DumpRow;
 use crate::session::SessionCache;
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -47,9 +47,9 @@ use window::{validate_period, windows};
 #[derive(Debug, Clone)]
 pub struct DumpOptions {
     /// Data inicial do período, inclusiva.
-    pub from: NaiveDate,
+    pub from: Date,
     /// Data final do período, inclusiva.
-    pub to: NaiveDate,
+    pub to: Date,
     /// Tamanho das janelas em dias; o período é dividido em blocos contíguos.
     pub window_days: u32,
     /// Diretório de saída para JSONL/CSV/PDF/relatório/estado.
@@ -67,7 +67,7 @@ pub struct DumpOptions {
     /// Concorrência de requisições por conta.
     pub concurrency: u32,
     /// Relógio fixo para determinismo de testes.
-    pub fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub fixed_time: Option<jiff::Timestamp>,
 }
 
 /// Falha de uma janela, conta ou PDF, registrada no relatório.

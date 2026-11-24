@@ -18,7 +18,7 @@ pub(super) async fn download_pdfs(
     accounts: &[&Account],
     rows: &[DumpRow],
     out: &Path,
-    fixed_time: Option<chrono::DateTime<chrono::Utc>>,
+    fixed_time: Option<jiff::Timestamp>,
     errors: &mut Vec<DumpError>,
 ) -> Result<(), CliError> {
     let dir = out.join("pdfs");

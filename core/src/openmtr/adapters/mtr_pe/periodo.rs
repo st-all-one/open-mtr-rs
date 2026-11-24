@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures::stream::{self, StreamExt};
+use jiff::ToSpan;
 use serde_json::{Value, json};
 use tracing::{info, warn};
 
@@ -36,17 +37,26 @@ impl MtrPeAdapter {
         let mut barcodes: Vec<String> = Vec::new();
         let mut atual = inicio;
         while atual <= fim {
-            let janela_fim = (atual + chrono::Duration::days(JANELA_DIAS - 1)).min(fim);
+            let Some(janela_fim) = atual
+                .checked_add(ToSpan::days(JANELA_DIAS - 1))
+                .ok()
+                .map(|d| d.min(fim))
+            else {
+                break;
+            };
             let path = format!(
                 "/retornaListaCodigoBarasManifesto/{}/{}",
-                atual.format("%Y%m%d"),
-                janela_fim.format("%Y%m%d")
+                jiff::fmt::strtime::format("%Y%m%d", atual).unwrap_or_default(),
+                jiff::fmt::strtime::format("%Y%m%d", janela_fim).unwrap_or_default()
             );
             let resp: Value = ctx.http.post(&path, &json!({}), "listar_barcodes").await?;
             if let Some(codigos) = resp.get("codigos").and_then(Value::as_array) {
                 barcodes.extend(codigos.iter().filter_map(|c| c.as_str().map(String::from)));
             }
-            atual = janela_fim + chrono::Duration::days(1);
+            let Some(proxima) = janela_fim.checked_add(ToSpan::days(1)).ok() else {
+                break;
+            };
+            atual = proxima;
         }
 
         barcodes.sort();

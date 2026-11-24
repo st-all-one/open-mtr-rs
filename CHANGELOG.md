@@ -4,6 +4,39 @@ Todas as mudanças relevantes do openMTR/CLI. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa
 versionamento semântico.
 
+## [0.3.0] - 2026-11-23
+
+Migração da biblioteca de datas: **`chrono` → `jiff`**, encerrando o último
+advisory aberto (RUSTSEC-2026-0543). Minor bump porque o tipo público dos
+campos de data muda, embora **o contrato de bytes seja idêntico**.
+
+### Alterado
+
+- **Datas no domínio público agora são `jiff`**: `jiff::civil::Date` (antes
+  `chrono::NaiveDate`), `jiff::civil::DateTime` (antes `NaiveDateTime`) e
+  `jiff::Timestamp` (antes `DateTime<Utc>`) em `DataMtr`, `Periodo`, `Mtr`,
+  `Cdf`, `ReceberMtr`, `CriarMtr`, `Clock`/`FixedClock`, etc. Quem constrói
+  esses tipos troca o import; quem só lê JSON/CSV não vê diferença.
+- `Clock::now()` devolve `jiff::Timestamp`; `Clock::today()` devolve
+  `jiff::civil::Date`. `FixedClock::new` recebe `jiff::Timestamp`.
+- `jiff` entra com `default-features = false` (só calendário/instantes; UTC é
+  embutido, sem tzdb).
+
+### Garantido (contrato de bytes)
+
+- **Nenhum byte muda** na saída: `DataMtr` continua `dd-MM-yyyy`,
+  `NaiveDateTime` equivalia a ISO 8601 (`2026-06-01T13:45:07`) e instantes a
+  `2026-05-28T20:26:40Z`; parsers seguem aceitando `dd-MM-yyyy`, ISO 8601,
+  RFC 3339 e epoch ms. Provado por `core/tests/date_bytes.rs` (golden) e
+  `core/tests/mtr_pe_request_bytes.rs` (payload enviado ao MTR-PE).
+- `cargo deny check` e `cargo audit` sem o ignore de `RUSTSEC-2026-0543`;
+  `chrono` não está mais na árvore de dependências.
+
+### Corrigido
+
+- `DataMtr`, `TimestampMs` e `Periodo` ganharam `PartialEq`/`Eq`/`Ord`/`Hash`
+  (necessários para comparar e usar como chave; antes faltavam).
+
 ## [0.2.1] - 2026-11-23
 
 Revisão de manutenção para Rust 1.100: supply chain, imagem Docker e

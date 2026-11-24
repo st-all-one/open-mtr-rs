@@ -18,16 +18,14 @@ targets = [
 [advisories]
 version = 2
 yanked = "deny"
-# Transitivos do UniFFI 0.28 (bincode e paste) e do wiremock (basic-toml); o chrono
-# sustenta os tipos de data do domínio. Todos são "unmaintained" sem versão corrigida:
-# o risco é de manutenção, não de vulnerabilidade explorável no runtime do binário.
-# Migrar chrono→time/jiff (RUSTSEC-2026-0543) fica como tarefa de revitalização
-# registrada no kd; remover o ignore ao concluir.
+# Transitivos do UniFFI 0.28 (bincode e paste) e do wiremock (basic-toml). Todos são
+# "unmaintained" sem versão corrigida: o risco é de manutenção, não de vulnerabilidade
+# explorável no runtime do binário. O `chrono` (RUSTSEC-2026-0543) foi substituído por
+# `jiff`, então o ignore desse advisory foi removido.
 ignore = [
     "RUSTSEC-2025-0141", # bincode unmaintained (via uniffi_macros)
     "RUSTSEC-2024-0436", # paste unmaintained (via uniffi_bindgen/uniffi_core)
     "RUSTSEC-2026-0374", # basic-toml unmaintained (via wiremock; dev-only, não vai ao binário)
-    "RUSTSEC-2026-0543", # chrono unmaintained (sem substituto na MSRV; migração em kd)
 ]
 
 [licenses]
